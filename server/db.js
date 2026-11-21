@@ -33,7 +33,7 @@ for (const sql of [
   "ALTER TABLE results ADD COLUMN kills INTEGER NOT NULL DEFAULT 0"
 ]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes('duplicate column')) throw e; } }
 
-const games=[['Ludo',['Classic','Quick','Tournament']],['PUBG/BGMI',['BR Solo','BR Duo','BR Squad']],['Free Fire',['BR Solo','BR Duo','BR Squad','Clash Squad']],['Other',['Custom']]];
+const games=[['Ludo',['Classic','Quick','Tournament']],['PUBG/BGMI',['BR Solo','BR Duo','BR Squad']],['Free Fire',['BR Solo','BR Duo','BR Squad','Clash Squad','Survival','CS 4 VS 4','Lone Wolf','CS Headshot','Lose 2 Win','Free Match']],['Other',['Custom']]];
 for(const [name,modes] of games){let g=db.prepare('INSERT OR IGNORE INTO games(name) VALUES(?)').run(name);let id=db.prepare('SELECT id FROM games WHERE name=?').get(name).id; for(const m of modes)db.prepare('INSERT OR IGNORE INTO modes(game_id,name) VALUES(?,?)').run(id,m);}
 db.prepare('INSERT OR IGNORE INTO rules(id,content) VALUES(1,?)').run('1. Be respectful to all players.\n2. Join before the match starts.\n3. Do not use cheats or exploits.\n4. Admin decisions are final.');
 for(const [k,v] of [['app_name','ZYROX ARENA'],['support_contact','support@zyroxarena.local'],['deposit_instructions','Send payment manually and submit your transaction reference. Admin approval is required.'],['withdrawal_minimum','50'],['referral_enabled','true'],['referral_commission_percent','1'],['referral_bonus','0']]) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k,v);
