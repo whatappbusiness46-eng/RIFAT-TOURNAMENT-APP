@@ -32,3 +32,10 @@ This ZIP is a source/configuration handoff, not a certified production release.
 Render Free with `/tmp` SQLite is demo-only. Do not accept real deposits, withdrawals,
 paid entries, or prize payouts until a durable database adapter is implemented and
 the complete API integration and backup/restore tests pass.
+
+## Per-match rules update
+- Added a `matches.rules` SQLite migration with an empty default for existing matches.
+- Admin Create Match and Edit Match forms accept a separate rules/regulations text for each match.
+- Public match detail returns that match's rules; the player VIEW MATCH dialog displays them.
+- Existing global rules remain unchanged and separate from match-specific rules.
+- Static syntax checks: server/index.js and server/db.js pass `node --check`; runtime/API and device verification remain pending.
