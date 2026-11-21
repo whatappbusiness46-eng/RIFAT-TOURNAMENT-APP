@@ -16,7 +16,7 @@
       }
     },
     "extra": {
-      "apiUrl": "https://YOUR_API_DOMAIN",
+      "apiUrl": "https://rifat-tournament-app.onrender.com",
       "eas": {
         "projectId": "5fc13bf7-2a62-49f1-912a-606171e535fa"
       }
