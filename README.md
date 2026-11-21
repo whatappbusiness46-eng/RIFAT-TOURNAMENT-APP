@@ -40,6 +40,12 @@ The server is API-only. Health check: `GET /api/health`. SQLite is initialized a
 - Admin → Developer Profile → Referrals shows the commission ledger. Admin → Settings controls `referral_enabled` (`true`/`false`), `referral_commission_percent` (0–50), and `referral_bonus` (reserved configuration; no signup bonus is currently credited).
 - Default referral commission is 1%. Commission is calculated on the completed match entry fee, not on kills or prize winnings.
 
+## Deployment guides
+
+- `docs/DEPLOYMENT-GITHUB-RENDER-EXPO.md` — GitHub, Render, and Expo APK workflow.
+- `docs/RENDER-FREE-LIMITATIONS.md` — important SQLite data-persistence warning for Render Free.
+- `render.yaml` — Render Blueprint for a demo deployment.
+
 ## Expo Android setup
 
 Requirements: Node.js 20+, Expo account, EAS CLI, and a public HTTPS backend URL.
