@@ -1,9 +1,20 @@
-# Render Free deployment note
+# Render Free limitations — read before deployment
 
-This project currently uses `better-sqlite3` and a local SQLite file. The included `render.yaml` deploys a free web service and stores that file at `/tmp/zyrox.sqlite` so the service can start without a paid persistent disk.
+The current backend uses synchronous `better-sqlite3` and stores the database at `DATABASE_FILE`.
 
-**Important: Render Free web services have an ephemeral filesystem.** The SQLite database can be lost when the service restarts, is redeployed, or is moved to another instance. This is acceptable only for a temporary/demo deployment with test data. Do not accept real deposits, withdrawals, paid tournament entries, or rely on wallet balances/results on this setup.
+The included `render.yaml` sets `DATABASE_FILE=/tmp/zyrox.sqlite` so the free web service can start. **Render Free's filesystem is ephemeral.** SQLite data may be lost on restart, redeploy, or instance replacement. Therefore this configuration is suitable only for demos and test data.
 
-For durable production data, attach persistent storage (if available on the selected plan) or migrate the application database from SQLite to a managed PostgreSQL service. This codebase has synchronous better-sqlite3 queries throughout; changing to PostgreSQL requires a deliberate database-layer migration and end-to-end tests, not just changing `DATABASE_FILE`.
+Do not use the Render Free deployment for:
+- real deposits or withdrawals;
+- paid tournament entry fees;
+- wallet balances, prize payouts, or referral commissions that must be preserved;
+- any operation where loss or rollback of financial records would harm a player.
 
-After deployment, verify `https://YOUR-SERVICE.onrender.com/api/health` returns `{ "ok": true, "app": "ZYROX ARENA" }`. Set a strong unique `ADMIN_EMAIL` and `ADMIN_PASSWORD` in Render environment settings. Never use example credentials.
+## Production persistence choices
+
+1. **Single Render instance with durable disk:** use a Render plan that supports a persistent disk, attach it to the service, and set `DATABASE_FILE` to a path inside the mounted disk. Back up the database and test restore. SQLite is not suitable for multiple app instances sharing a local file.
+2. **Managed PostgreSQL:** migrate the complete data-access layer from synchronous `better-sqlite3` to PostgreSQL, add schema migrations, transfer existing data, and run full integration/concurrency tests. Merely setting a `DATABASE_URL` or changing `DATABASE_FILE` does not perform this migration.
+
+The requested combination “Render Free + durable production database” is not satisfied by this repository as supplied. Do not describe it as production-ready until a durable database implementation is deployed and verified.
+
+After deployment, verify `https://YOUR-SERVICE.onrender.com/api/health` returns `{ "ok": true, "app": "ZYROX ARENA" }`. Set a unique `ADMIN_EMAIL`, a strong `ADMIN_PASSWORD` (12+ characters), and a random `JWT_SECRET` (32+ characters) in Render environment settings. Never commit secrets.
