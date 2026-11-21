@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "ZYROX ARENA",
+    "slug": "zyrox-arena",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.zyroxarena.mobile",
+      "versionCode": 1,
+      "permissions": [],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/zyrox-app-icon.png",
+        "backgroundColor": "#07111f"
+      }
+    },
+    "extra": {
+      "apiUrl": "https://YOUR_API_DOMAIN"
+    },
+    "icon": "./assets/zyrox-app-icon.png"
+  }
+}
