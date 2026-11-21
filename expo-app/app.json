@@ -13,7 +13,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/zyrox-app-icon.png",
         "backgroundColor": "#07111f"
-      }
+      },
+      "softwareKeyboardLayoutMode": "resize"
     },
     "extra": {
       "apiUrl": "https://rifat-tournament-app.onrender.com",
@@ -21,6 +22,15 @@
         "projectId": "5fc13bf7-2a62-49f1-912a-606171e535fa"
       }
     },
-    "icon": "./assets/zyrox-app-icon.png"
+    "icon": "./assets/zyrox-app-icon.png",
+    "androidStatusBar": {
+      "backgroundColor": "#07111f",
+      "barStyle": "light-content",
+      "translucent": false
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#07111f",
+      "barStyle": "light-content"
+    }
   }
 }
