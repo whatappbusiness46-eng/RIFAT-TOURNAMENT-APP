@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS referral_earnings(id INTEGER PRIMARY KEY, referrer_id
 try{db.exec("ALTER TABLE modes ADD COLUMN image_url TEXT DEFAULT ''")}catch{}
 try{db.exec("ALTER TABLE modes ADD COLUMN is_free INTEGER DEFAULT 0")}catch{}
 try{db.exec("ALTER TABLE modes ADD COLUMN active INTEGER DEFAULT 1")}catch{}
+try{db.exec("ALTER TABLE modes ADD COLUMN rules TEXT NOT NULL DEFAULT ''")}catch{}
+// Seed blank match rules from each mode's admin-managed defaults (existing matches only).
+db.exec("UPDATE matches SET rules=COALESCE((SELECT rules FROM modes WHERE modes.id=matches.mode_id), '') WHERE COALESCE(rules,'')=''");
 // Referral migrations (safe to run on every startup).
 for (const sql of ["ALTER TABLE users ADD COLUMN referral_code TEXT", "ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id)"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes('duplicate column')) throw e; } }
 // Tournament economy migrations (safe to run on every startup).
