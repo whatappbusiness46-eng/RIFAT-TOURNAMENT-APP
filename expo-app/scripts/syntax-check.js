@@ -1,0 +1,1 @@
+const fs=require('fs');const p=require('path');const f=p.join(__dirname,'..','App.js');const s=fs.readFileSync(f,'utf8');if(!s.includes('export default function App'))throw Error('Expo entry missing');console.log('Expo source presence check passed');
