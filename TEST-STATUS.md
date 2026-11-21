@@ -39,3 +39,11 @@ the complete API integration and backup/restore tests pass.
 - Public match detail returns that match's rules; the player VIEW MATCH dialog displays them.
 - Existing global rules remain unchanged and separate from match-specific rules.
 - Static syntax checks: server/index.js and server/db.js pass `node --check`; runtime/API and device verification remain pending.
+
+
+## Latest UI and Free Fire card update (2026-11-22)
+- Login/register controls and brand mark increased slightly (~5-6%).
+- Home content uses tighter horizontal padding and smaller match-card imagery/details; cards are constrained to 100% of the content width.
+- Free Fire mode cards use their matching local artwork for known modes, preventing a stale server thumbnail from overriding the correct local image.
+- Backend startup seed now includes 10 Free Fire modes while retaining the existing four mode IDs and adding six missing modes idempotently.
+- Static validation performed for backend JavaScript syntax, referenced image assets, and ZIP integrity. Full dependency-based Expo build, APK/device testing, and live API validation have not been run.

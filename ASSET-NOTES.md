@@ -19,3 +19,5 @@ Free Fire mode thumbnails (10 separate local PNG files):
 - `free-match.png`
 
 Mode thumbnails are selected by normalized mode name when the server mode has no custom `image_url`. A server-provided `image_url` continues to take precedence.
+
+Free Fire home cards: the backend seeds ten separate modes (BR Solo, BR Duo, BR Squad, Clash Squad, Survival, CS 4 VS 4, Lone Wolf, CS Headshot, Lose 2 Win, Free Match). Existing mode IDs are retained; the six additional modes are inserted with INSERT OR IGNORE on startup. Known Free Fire modes use their matching local artwork to avoid stale or mismatched remote thumbnails.
