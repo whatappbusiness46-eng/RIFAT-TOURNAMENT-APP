@@ -1,24 +1,34 @@
-# Test status – Refer & Earn update
+# Verification status — 2026-11-22
 
-- `npm run check`: PASS (Node syntax checks for server and app source)
-- Referral API/schema implementation: added; runtime verification requires installed dependencies and configured database.
-- `npm test`: BLOCKED because project dependencies are not installed in this environment (`dotenv` missing).
-- Expo dependency installation / Expo Doctor: NOT RUN.
-- Android APK build and on-device visual verification: NOT RUN.
+## Passed in this workspace
+- Original supplied ZIP integrity: PASS.
+- Backend JavaScript syntax (`node --check`): PASS.
+- Expo App JSX/JavaScript parsing through the repository syntax script: PASS where
+  the globally available TypeScript parser is present.
+- Expo `app.json`, `eas.json`, root `package.json`, and Expo `package.json` JSON parse: PASS.
+- Render YAML parse: PASS.
+- PNG asset decoding and static asset path checks from the prior audit: PASS.
+- Expo API URL can now be injected from `EXPO_PUBLIC_API_URL` using `app.config.js`.
 
-Referral behavior implemented in source:
-- Registration accepts an optional referral code and each account receives a unique referral code.
-- Referral commission defaults to 1% and is credited to the referrer wallet when an admin marks a referred player's match completed.
-- Unique referral earning constraint prevents duplicate commissions for the same referred player and match.
-- Monthly/lifetime referral leaderboard and admin referral ledger are included.
-- Admin settings control referral enable/disable and commission percentage. `referral_bonus` is reserved and does not currently issue a signup bonus.
+## Not passed / not run
+- `npm install` / lockfile generation: BLOCKED. Registry access timed out; offline
+  retry confirmed required package metadata is not cached. No `package-lock.json`
+  is fabricated or included.
+- Backend API runtime and database integration tests: NOT RUN because dependencies
+  are not installed.
+- `npm test`: BLOCKED by missing installed dependencies.
+- `npx expo-doctor`: NOT RUN; Expo dependencies are not installed.
+- EAS remote APK build: NOT RUN; requires network access and the owner's Expo/EAS
+  account, project credentials, and configured public API URL.
+- Render deployment / live health check: NOT RUN; requires the owner's Render account.
+- Physical Android login/navigation testing: NOT RUN.
+- External hosted database integration: BLOCKED pending the provider name and engine.
+  Current backend only supports local SQLite and ignores `DATABASE_URL`.
+- Financial durability, backup/restore, payment provider, and production security
+  verification: NOT RUN.
 
-Do not treat this build as production-tested until dependencies are installed and backend/API tests pass.
-
-
-## Latest update – Free Fire thumbnails and persistent login
-
-- Added ten distinct Free Fire mode thumbnail PNGs under `expo-app/assets/` and mapped them by mode name as local fallbacks. Server-provided mode `image_url` remains the preferred image.
-- Added AsyncStorage 2.2.0 and token persistence: login/register saves the server token; app startup restores it; logout clears it.
-- Passed: backend JavaScript syntax checks, Expo source-presence check, JSX parse, JSON manifest parsing, and ZIP integrity.
-- Not run: dependency installation, backend runtime/database integration, Expo Doctor, EAS APK build, and physical Android tests. These require dependency installation/network and/or configured backend/device access.
+## Release gate
+This ZIP is a source/configuration handoff, not a certified production release.
+Render Free with `/tmp` SQLite is demo-only. Do not accept real deposits, withdrawals,
+paid entries, or prize payouts until a durable database adapter is implemented and
+the complete API integration and backup/restore tests pass.

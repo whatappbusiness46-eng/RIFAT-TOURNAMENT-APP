@@ -6,7 +6,6 @@ This project is an Android-first Expo React Native tournament app with one share
 
 - `expo-app/` — Expo React Native Android app (player + admin in the same app; admin controls are role-gated by server API).
 - `server/` — Express REST API, SQLite schema, hashed-password authentication, wallet ledger, tournament operations, referral attribution and commission ledger.
-- `docs/reference/` — screenshots supplied by the user showing the Games Club home screen and mode selection layout.
 - `.env.example` — server configuration template.
 
 ## Authentication
@@ -17,7 +16,7 @@ For phone-only accounts, the database uses an internal non-deliverable placehold
 
 ## Backend setup
 
-Requirements: Node.js 20+, JavaScript build tooling, and a host with persistent disk for SQLite. For production, use a managed database such as PostgreSQL rather than ephemeral serverless storage.
+Requirements: Node.js 20+ and a host with durable storage for SQLite. Render Free uses an ephemeral filesystem and is not safe for durable wallets, deposits, withdrawals, paid entries, or prize balances. A persistent database/volume is mandatory before production use. The current source is SQLite-only; it does not support a hosted PostgreSQL `DATABASE_URL` until the data layer is migrated. See `docs/DATABASE-CONNECTION-BLOCKER.md`.
 
 ```bash
 cp .env.example .env
@@ -29,7 +28,7 @@ npm test
 npm start
 ```
 
-The server is API-only. Health check: `GET /api/health`. SQLite is initialized automatically on first run. The initial admin is created from `ADMIN_EMAIL` and `ADMIN_PASSWORD` on first startup. Keep these secrets on the server only. Change the admin password from the app's Developer Profile → Security screen after first login.
+The server is API-only. Health check: `GET /api/health`. SQLite is initialized automatically on first run. The initial admin is created from `ADMIN_EMAIL` and `ADMIN_PASSWORD` on first startup. `ADMIN_PASSWORD` must be at least 12 characters; the server refuses first-time admin creation when these credentials are missing rather than using a public default password. Keep these secrets on the server only. Change the admin password from the app's Developer Profile → Security screen after first login.
 
 ## Referral & Earn
 
@@ -45,7 +44,7 @@ The server is API-only. Health check: `GET /api/health`. SQLite is initialized a
 Requirements: Node.js 20+, Expo account, EAS CLI, and a public HTTPS backend URL.
 
 1. Deploy the API backend and verify `https://YOUR_API_DOMAIN/api/health`.
-2. Edit `expo-app/app.json` and set `expo.extra.apiUrl` to that HTTPS API origin (no trailing slash).
+2. Set `EXPO_PUBLIC_API_URL` to the exact HTTPS API origin (no trailing slash). Copy `expo-app/.env.example` to `expo-app/.env` for local builds, or set the same variable in the EAS project environment for cloud builds. `expo-app/app.config.js` injects it into `expo.extra.apiUrl`; the app reads it through `expo-constants`.
 3. From `expo-app/` run:
 
 ```bash
@@ -83,9 +82,9 @@ No payment success is faked. Deposits require a payment reference and admin appr
 
 ## Security / production checklist
 
-- Use HTTPS, strong random JWT secret, strong unique admin password, restricted CORS, rate limiting, account verification, password reset, audit logging, backups, monitoring, and privacy/terms pages.
+- Use HTTPS, strong random JWT secret, strong unique admin password, CORS origin allowlisting (`CORS_ORIGINS`), rate limiting, account verification, password reset, audit logging, backups, monitoring, and privacy/terms pages.
 - Keep `.env`, database backups, and signing credentials out of the ZIP and source control.
-- Use a persistent database volume. Back up SQLite consistently; migrate to PostgreSQL for multi-instance production.
+- Render Free filesystem is ephemeral: the included free Blueprint is demo-only. For production, attach a paid persistent disk or migrate the data layer to a managed PostgreSQL database and verify backups/restore. Merely changing `DATABASE_FILE` does not migrate SQLite to PostgreSQL.
 - Confirm admin access, payment settlement, winner eligibility, payout policy, dispute handling, and anti-cheat procedures before real-money operation.
 
 ## Test status
@@ -98,9 +97,9 @@ See `TEST-STATUS.md`. Source-level syntax checks are not the same as a deployed 
 - Game tiles: `ludo-icon.png`, `pubg-bgmi-icon.png`, `free-fire-icon.png`, `more-games-icon.png`
 - These are original AI-generated illustrative assets for this project, not official game logos or endorsements. Ludo is represented separately from PUBG/BGMI.
 - The Expo app now references the launcher icon and uses the game artwork in the game selection cards.
-- Home screen supports admin-managed YouTube video embeds (regular videos and Shorts URLs), a Games / Others switch, selectable mode cards, custom mode artwork URLs, and Free Match badges. These are managed inside the in-app **Developer Profile** admin area → Home Videos and Games & Modes.
+- Home screen supports admin-managed YouTube links (regular videos and Shorts URLs), a Games / Others switch, selectable mode cards, custom mode artwork URLs, and Free Match badges. These are managed inside the in-app **Developer Profile** admin area → Home Videos and Games & Modes.
 - Game mode cards can use custom HTTPS image URLs; leave blank to use the built-in original game art. Ludo remains a separate game.
-- YouTube playback uses `react-native-webview`; it is included in Expo app dependencies and installed by `npm install`.
+- Home video cards open the configured YouTube URL using the device's external link handler; no embedded WebView dependency is required.
 
 ## Automatic tournament economy (added)
 Each match can now be configured by the Developer Profile admin panel with:
@@ -128,9 +127,34 @@ Admin API routes are protected centrally by admin authentication and role checks
 ## Player profile screen update (reference screenshots)
 - Profile page now follows the supplied Games Club screenshots: navy profile header, circular avatar treatment, player name/contact/UID, editable display name, available wallet balance with Add action, match/referral/win summary, Account rows, Game Center leaderboard, More rows, version label, and logout.
 - My Wallet and All Statements open the wallet/transaction history screen. Terms and Conditions opens the admin-managed Rules page. Developer Profile shows platform support information. Share App uses the Android share sheet.
-- Profile API: `GET /api/profile/stats` and `PATCH /api/profile`. The stats endpoint calculates matches, published wins, prize total, and leaderboard from stored match/result data. Referral count currently remains zero because a referral attribution/reward program is not implemented yet; the Refer & Earn row shares the player's UID only.
+- Profile API: `GET /api/profile/stats` and `PATCH /api/profile`. The stats endpoint calculates matches, published wins, prize total, and leaderboard from stored match/result data. Referral attribution and commission are handled by the referral endpoints and referral earnings ledger described in the Refer & Earn section above.
 
 
 ## Free Fire mode artwork
 
 The Expo app includes ten bundled PNG thumbnails for Solo BR, Duo BR, Pro League, Survival, CS 4 vs 4, Clash Squad, Lone Wolf, CS Headshot, Lose 2 Win, and Free Match. They are used as local fallback artwork when an admin-managed mode does not supply its own image URL.
+
+
+### Login and Home stability update
+
+- Login/Register is sized for smaller Android screens and remains scrollable when the keyboard is open.
+- Home data loading now handles optional API failures without rendering incomplete account data.
+- Home YouTube cards open the configured HTTPS video link in the device browser/YouTube app, avoiding an embedded WebView on the initial Home screen.
+- The unused `react-native-webview` dependency was removed from the Expo app.
+
+
+## External database integration status
+
+The owner intends to use a separately hosted database. The provider has not yet
+been identified in the supplied project materials. This backend currently uses
+synchronous `better-sqlite3`; setting a `DATABASE_URL` will have no effect. Do not
+deploy financial production traffic until the provider-specific database migration
+and transaction tests are completed. See `docs/DATABASE-CONNECTION-BLOCKER.md`.
+
+## Environment files
+
+- Backend: copy root `.env.example` to `.env` for local API development.
+- Expo: copy `expo-app/.env.example` to `expo-app/.env`, or configure
+  `EXPO_PUBLIC_API_URL` in EAS for remote builds.
+- Never commit `.env`, database backups, service-role keys, database passwords,
+  JWT secrets, or EAS signing credentials.

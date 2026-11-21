@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "check": "node --check server/index.js && node --check server/db.js && node --check expo-app/App.js",
+    "check": "node --check server/index.js && node --check server/db.js && node expo-app/scripts/syntax-check.js",
     "test": "node --test server/*.test.js"
   },
   "dependencies": {
@@ -18,5 +18,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }
