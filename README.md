@@ -129,3 +129,8 @@ Admin API routes are protected centrally by admin authentication and role checks
 - Profile page now follows the supplied Games Club screenshots: navy profile header, circular avatar treatment, player name/contact/UID, editable display name, available wallet balance with Add action, match/referral/win summary, Account rows, Game Center leaderboard, More rows, version label, and logout.
 - My Wallet and All Statements open the wallet/transaction history screen. Terms and Conditions opens the admin-managed Rules page. Developer Profile shows platform support information. Share App uses the Android share sheet.
 - Profile API: `GET /api/profile/stats` and `PATCH /api/profile`. The stats endpoint calculates matches, published wins, prize total, and leaderboard from stored match/result data. Referral count currently remains zero because a referral attribution/reward program is not implemented yet; the Refer & Earn row shares the player's UID only.
+
+
+## Free Fire mode artwork
+
+The Expo app includes ten bundled PNG thumbnails for Solo BR, Duo BR, Pro League, Survival, CS 4 vs 4, Clash Squad, Lone Wolf, CS Headshot, Lose 2 Win, and Free Match. They are used as local fallback artwork when an admin-managed mode does not supply its own image URL.

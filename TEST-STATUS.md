@@ -1,18 +1,24 @@
-# Zyrox Arena – crash fix verification
+# Test status – Refer & Earn update
 
-## Source-level root cause found
-After successful login, `setToken()` caused a render immediately. The authenticated home screen accessed `me.name` before the asynchronous `/api/me` request in `load()` had completed and set `me`. Since `me` was initially `null`, this could throw a JavaScript TypeError during the first authenticated render and terminate the app.
+- `npm run check`: PASS (Node syntax checks for server and app source)
+- Referral API/schema implementation: added; runtime verification requires installed dependencies and configured database.
+- `npm test`: BLOCKED because project dependencies are not installed in this environment (`dotenv` missing).
+- Expo dependency installation / Expo Doctor: NOT RUN.
+- Android APK build and on-device visual verification: NOT RUN.
 
-## Fixes applied
-- Resolve `/api/me` first and set the authenticated user before loading dashboard data.
-- Added an authenticated loading/error screen so the app never renders player/admin screens while `me` is null.
-- Added Retry and Back to Login actions when the initial account request fails.
-- Changed secondary dashboard requests to `Promise.allSettled`; a failed optional endpoint no longer blocks the entire authenticated screen.
-- API base URL now reads `expo.extra.apiUrl`, with the previous Render URL as fallback.
+Referral behavior implemented in source:
+- Registration accepts an optional referral code and each account receives a unique referral code.
+- Referral commission defaults to 1% and is credited to the referrer wallet when an admin marks a referred player's match completed.
+- Unique referral earning constraint prevents duplicate commissions for the same referred player and match.
+- Monthly/lifetime referral leaderboard and admin referral ledger are included.
+- Admin settings control referral enable/disable and commission percentage. `referral_bonus` is reserved and does not currently issue a signup bonus.
 
-## Checks
-- `node --check expo-app/App.js`: to be run during packaging.
-- `node --check server/index.js` and `server/db.js`: source syntax checks only.
-- Android build, physical-device crash reproduction, backend runtime, and API integration remain unverified in this environment because dependencies/network and device access are unavailable.
+Do not treat this build as production-tested until dependencies are installed and backend/API tests pass.
 
-The null-user render is a source-confirmed crash path matching the supplied recording's login-then-exit behavior. The fix addresses that path, but cannot guarantee no other crash exists until a new APK is installed and tested on the user's phone.
+
+## Latest update – Free Fire thumbnails and persistent login
+
+- Added ten distinct Free Fire mode thumbnail PNGs under `expo-app/assets/` and mapped them by mode name as local fallbacks. Server-provided mode `image_url` remains the preferred image.
+- Added AsyncStorage 2.2.0 and token persistence: login/register saves the server token; app startup restores it; logout clears it.
+- Passed: backend JavaScript syntax checks, Expo source-presence check, JSX parse, JSON manifest parsing, and ZIP integrity.
+- Not run: dependency installation, backend runtime/database integration, Expo Doctor, EAS APK build, and physical Android tests. These require dependency installation/network and/or configured backend/device access.
