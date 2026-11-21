@@ -29,6 +29,7 @@ for (const sql of [
   "ALTER TABLE matches ADD COLUMN prize_split_json TEXT NOT NULL DEFAULT '[50,30,20]'",
   "ALTER TABLE matches ADD COLUMN refund_on_cancel INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE matches ADD COLUMN payouts_published INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE matches ADD COLUMN rules TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE results ADD COLUMN kills INTEGER NOT NULL DEFAULT 0"
 ]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes('duplicate column')) throw e; } }
 
