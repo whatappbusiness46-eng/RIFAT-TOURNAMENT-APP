@@ -62,3 +62,6 @@ engine. The current synchronous SQLite adapter must be migrated to that provider
 including schema, indexes, migrations, and atomic wallet/tournament transactions.
 Then test on a disposable hosted database and verify backup/restore and persistence
 after a Render redeploy. See `DATABASE-CONNECTION-BLOCKER.md`.
+
+## Per-match rules and regulations
+Each tournament/match now stores its own `rules` text. Admins can enter or edit this text in the Create Match / Edit Match forms. Players see that match's rules from its VIEW MATCH action. The existing global Rules page remains separate; changing it does not overwrite individual match rules.
