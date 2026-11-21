@@ -20,6 +20,14 @@ try{db.exec("ALTER TABLE modes ADD COLUMN image_url TEXT DEFAULT ''")}catch{}
 try{db.exec("ALTER TABLE modes ADD COLUMN is_free INTEGER DEFAULT 0")}catch{}
 try{db.exec("ALTER TABLE modes ADD COLUMN active INTEGER DEFAULT 1")}catch{}
 try{db.exec("ALTER TABLE modes ADD COLUMN rules TEXT NOT NULL DEFAULT ''")}catch{}
+// Ensure the per-match rules column exists BEFORE any query references it.
+// This is required for both fresh databases and older Render SQLite databases.
+{
+  const matchColumns = db.prepare("PRAGMA table_info(matches)").all().map(c => c.name);
+  if (!matchColumns.includes('rules')) {
+    db.exec("ALTER TABLE matches ADD COLUMN rules TEXT NOT NULL DEFAULT ''");
+  }
+}
 // Seed blank match rules from each mode's admin-managed defaults (existing matches only).
 db.exec("UPDATE matches SET rules=COALESCE((SELECT rules FROM modes WHERE modes.id=matches.mode_id), '') WHERE COALESCE(rules,'')=''");
 // Referral migrations (safe to run on every startup).
