@@ -1,31 +1,14 @@
-# Test status – ZYROX ARENA deployment preparation
+# Test status – Zyrox Arena login screen repair
 
-Last checked: 2026-11-21 in the provided execution environment.
-
-## Passed
-
-- `node --check server/index.js`: PASS.
-- `node --check server/db.js`: PASS.
+## Verified in this environment
 - `node --check expo-app/App.js`: PASS.
-- `node expo-app/scripts/syntax-check.js`: PASS (source-presence check only).
-- JSON parsing for root `package.json`, `expo-app/package.json`, `expo-app/app.json`, and `expo-app/eas.json`: PASS.
-- ZIP archive integrity: PASS after packaging.
-- App API base URL now reads `expo.extra.apiUrl` from Expo config, with the previous service URL as fallback.
-- Added Render Blueprint (`render.yaml`) and GitHub → Render → EAS instructions.
+- `node ./expo-app/scripts/syntax-check.js`: PASS (source-presence check only).
+- `expo-app/app.json` and `expo-app/package.json` JSON parsing: PASS.
+- Login screen source updated to prevent the global `flex: 1` button style from expanding login/register buttons vertically.
+- Login/register screen now uses a scrollable, keyboard-aware layout, responsive logo sizing, constrained content width, smaller input/button dimensions, and safe-area provider.
+- Android keyboard resize and status/navigation bar colors configured.
 
-## Failed / blocked / not run
-
-- Root `npm test`: FAIL in this environment because dependencies are not installed (`Cannot find module 'dotenv'`). This is an environment/dependency failure; it does not prove all server behavior works.
-- Dependency installation: NOT COMPLETED. npm registry access timed out; npm cache is empty.
-- `package-lock.json`: NOT GENERATED. No complete lockfile was fabricated.
-- Backend runtime, SQLite migrations, API endpoint integration: NOT VERIFIED because `dotenv`, `better-sqlite3`, and other packages are not installed.
-- Expo dependency install and `npx expo-doctor`: NOT RUN.
-- Android export / EAS APK build: NOT RUN; requires dependency installation, network access, and the owner's Expo account.
-- Real Android device / crash test: NOT RUN.
-- GitHub push and Render deployment: NOT RUN; requires the owner's accounts and authorization.
-
-## Important Render Free limitation
-
-The backend currently uses a local SQLite file. The included free Render blueprint stores it under `/tmp`, which is ephemeral. Data can be lost after restarts or redeploys. This is demo-only; do not use for real-money transactions or important player balances/results. Durable production operation needs persistent storage or a tested migration to managed PostgreSQL.
-
-See `docs/RENDER-FREE-LIMITATIONS.md` and `docs/DEPLOYMENT-GITHUB-RENDER-EXPO.md` before deploying.
+## Not verified
+- The provided screenshots show oversized login/register buttons and bottom help text overlapping the Android navigation area. This layout issue is addressed in source, but no new APK was built or tested on the user's phone.
+- The oversized controls and bottom overlap are UI/layout defects; screenshots alone do not establish that they caused the Android process crash.
+- Dependency installation, backend runtime, API integration, Expo Doctor, EAS build, and physical-device crash verification were not completed in this environment.
