@@ -16,7 +16,10 @@
       }
     },
     "extra": {
-      "apiUrl": "https://YOUR_API_DOMAIN"
+      "apiUrl": "https://YOUR_API_DOMAIN",
+      "eas": {
+        "projectId": "5fc13bf7-2a62-49f1-912a-606171e535fa"
+      }
     },
     "icon": "./assets/zyrox-app-icon.png"
   }
