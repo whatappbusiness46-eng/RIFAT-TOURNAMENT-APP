@@ -2,7 +2,6 @@
   "expo": {
     "name": "ZYROX ARENA",
     "slug": "zyrox-arena",
-    "scheme": "zyroxarena",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -22,6 +21,9 @@
         "projectId": "5fc13bf7-2a62-49f1-912a-606171e535fa"
       }
     },
-    "icon": "./assets/zyrox-app-icon.png"
+    "icon": "./assets/zyrox-app-icon.png",
+    "ios": {
+      "bundleIdentifier": "com.zyroxarena.mobile"
+    }
   }
 }
