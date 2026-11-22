@@ -17,7 +17,5 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
-      # DEMO ONLY: Render Free has ephemeral storage. Replace the SQLite
-      # data layer with the selected hosted database before financial production use.
-      - key: DATABASE_FILE
-        value: /tmp/zyrox.sqlite
+      - key: DATABASE_URL
+        sync: false

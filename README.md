@@ -1,11 +1,11 @@
 # ZYROX ARENA — Expo Android + API backend
 
-This project is an Android-first Expo React Native tournament app with one shared REST API and SQLite database. The Expo app includes player and admin flows. There is no public-facing website UI in this delivery; the backend exposes JSON API routes only.
+This project is an Android-first Expo React Native tournament app with one shared REST API and Supabase PostgreSQL database. The Expo app includes player and admin flows. There is no public-facing website UI in this delivery; the backend exposes JSON API routes only.
 
 ## What is included
 
 - `expo-app/` — Expo React Native Android app (player + admin in the same app; admin controls are role-gated by server API).
-- `server/` — Express REST API, SQLite schema, hashed-password authentication, wallet ledger, tournament operations, referral attribution and commission ledger.
+- `server/` — Express REST API, PostgreSQL schema, hashed-password authentication, wallet ledger, tournament operations, referral attribution and commission ledger.
 - `.env.example` — server configuration template.
 
 ## Authentication
@@ -16,19 +16,19 @@ For phone-only accounts, the database uses an internal non-deliverable placehold
 
 ## Backend setup
 
-Requirements: Node.js 20+ and a host with durable storage for SQLite. Render Free uses an ephemeral filesystem and is not safe for durable wallets, deposits, withdrawals, paid entries, or prize balances. A persistent database/volume is mandatory before production use. The current source is SQLite-only; it does not support a hosted PostgreSQL `DATABASE_URL` until the data layer is migrated. See `docs/DATABASE-CONNECTION-BLOCKER.md`.
+Requirements: Node.js 20+ and a PostgreSQL database. The backend connects through `DATABASE_URL` (Supabase Session Pooler is supported). Keep the connection string only in the server's secret environment; never commit it.
 
 ```bash
 cp .env.example .env
 # Set a unique JWT_SECRET (32+ random characters), ADMIN_EMAIL, ADMIN_PASSWORD,
-# ADMIN_NAME, DATABASE_FILE, and PORT. Never commit .env.
+# ADMIN_NAME, DATABASE_URL, and PORT. Never commit .env.
 npm install
 npm run check
 npm test
 npm start
 ```
 
-The server is API-only. Health check: `GET /api/health`. SQLite is initialized automatically on first run. The initial admin is created from `ADMIN_EMAIL` and `ADMIN_PASSWORD` on first startup. `ADMIN_PASSWORD` must be at least 12 characters; the server refuses first-time admin creation when these credentials are missing rather than using a public default password. Keep these secrets on the server only. Change the admin password from the app's Developer Profile → Security screen after first login.
+The server is API-only. Health check: `GET /api/health`. PostgreSQL tables, indexes, and default settings are initialized automatically on first run. The initial admin is created from `ADMIN_EMAIL` and `ADMIN_PASSWORD` on first startup. `ADMIN_PASSWORD` must be at least 12 characters; the server refuses first-time admin creation when these credentials are missing rather than using a public default password. Keep these secrets on the server only. Change the admin password from the app's Developer Profile → Security screen after first login.
 
 ## Referral & Earn
 
@@ -84,7 +84,7 @@ No payment success is faked. Deposits require a payment reference and admin appr
 
 - Use HTTPS, strong random JWT secret, strong unique admin password, CORS origin allowlisting (`CORS_ORIGINS`), rate limiting, account verification, password reset, audit logging, backups, monitoring, and privacy/terms pages.
 - Keep `.env`, database backups, and signing credentials out of the ZIP and source control.
-- Render Free filesystem is ephemeral: the included free Blueprint is demo-only. For production, attach a paid persistent disk or migrate the data layer to a managed PostgreSQL database and verify backups/restore. Merely changing `DATABASE_FILE` does not migrate SQLite to PostgreSQL.
+- Set `DATABASE_URL` as a Render secret using the Supabase Session Pooler connection string. Configure backups/restore in Supabase and run end-to-end financial workflow tests before accepting real funds.
 - Confirm admin access, payment settlement, winner eligibility, payout policy, dispute handling, and anti-cheat procedures before real-money operation.
 
 ## Test status
@@ -145,11 +145,11 @@ The Expo app includes ten bundled PNG thumbnails for Solo BR, Duo BR, Pro League
 
 ## External database integration status
 
-The owner intends to use a separately hosted database. The provider has not yet
-been identified in the supplied project materials. This backend currently uses
-synchronous `better-sqlite3`; setting a `DATABASE_URL` will have no effect. Do not
-deploy financial production traffic until the provider-specific database migration
-and transaction tests are completed. See `docs/DATABASE-CONNECTION-BLOCKER.md`.
+The backend now uses the PostgreSQL `pg` driver and initializes its schema in Supabase.
+The code migration has source-level checks, but a live PostgreSQL integration test still
+requires `TEST_DATABASE_URL` pointing to a disposable database. Before real-money launch,
+verify login/register, deposit approval, withdrawal rejection/refund, concurrent match
+joins, cancellation refunds, referral credits, and one-time tournament payouts.
 
 ## Environment files
 
