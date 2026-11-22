@@ -44,8 +44,29 @@ for (const sql of [
   "ALTER TABLE results ADD COLUMN kills INTEGER NOT NULL DEFAULT 0"
 ]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes('duplicate column')) throw e; } }
 
-const games=[['Ludo',['Classic','Quick','Tournament']],['PUBG/BGMI',['BR Solo','BR Duo','BR Squad']],['Free Fire',['BR Solo','BR Duo','BR Squad','Clash Squad','Survival','CS 4 VS 4','Lone Wolf','CS Headshot','Lose 2 Win','Free Match']],['Other',['Custom']]];
-for(const [name,modes] of games){let g=db.prepare('INSERT OR IGNORE INTO games(name) VALUES(?)').run(name);let id=db.prepare('SELECT id FROM games WHERE name=?').get(name).id; for(const m of modes)db.prepare('INSERT OR IGNORE INTO modes(game_id,name) VALUES(?,?)').run(id,m);}
+// Keep only the requested games and seed their modes. SQLite assigns stable IDs
+// automatically; the same IDs are reused on later startups.
+const games=[
+  ['Ludo',['Classic','Quick','Tournament']],
+  ['Free Fire',['BR Solo','BR Duo','BR Squad','Clash Squad','Survival','CS 4 VS 4','Lone Wolf','CS Headshot','Lose 2 Win','Free Match']]
+];
+for(const [name,modes] of games){
+  db.prepare('INSERT OR IGNORE INTO games(name) VALUES(?)').run(name);
+  const id=db.prepare('SELECT id FROM games WHERE name=?').get(name).id;
+  for(const m of modes)db.prepare('INSERT OR IGNORE INTO modes(game_id,name) VALUES(?,?)').run(id,m);
+}
+// Remove unrequested game/mode IDs when they are not referenced by match history.
+// If historical matches reference them, retain but deactivate them to avoid breaking records.
+for(const row of db.prepare("SELECT id,name FROM games WHERE name NOT IN ('Ludo','Free Fire')").all()){
+  const used=db.prepare('SELECT 1 FROM matches WHERE game_id=? LIMIT 1').get(row.id);
+  if(used){
+    db.prepare('UPDATE games SET active=0 WHERE id=?').run(row.id);
+    db.prepare('UPDATE modes SET active=0 WHERE game_id=?').run(row.id);
+  }else{
+    db.prepare('DELETE FROM modes WHERE game_id=?').run(row.id);
+    db.prepare('DELETE FROM games WHERE id=?').run(row.id);
+  }
+}
 db.prepare('INSERT OR IGNORE INTO rules(id,content) VALUES(1,?)').run('1. Be respectful to all players.\n2. Join before the match starts.\n3. Do not use cheats or exploits.\n4. Admin decisions are final.');
 for(const [k,v] of [['app_name','ZYROX ARENA'],['support_contact','support@zyroxarena.local'],['deposit_instructions','Send payment manually and submit your transaction reference. Admin approval is required.'],['withdrawal_minimum','50'],['referral_enabled','true'],['referral_commission_percent','1'],['referral_bonus','0']]) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k,v);
 module.exports=db;
