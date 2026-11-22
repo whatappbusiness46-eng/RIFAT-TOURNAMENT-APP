@@ -31,7 +31,7 @@ try{db.exec("ALTER TABLE modes ADD COLUMN rules TEXT NOT NULL DEFAULT ''")}catch
 // Seed blank match rules from each mode's admin-managed defaults (existing matches only).
 db.exec("UPDATE matches SET rules=COALESCE((SELECT rules FROM modes WHERE modes.id=matches.mode_id), '') WHERE COALESCE(rules,'')=''");
 // Referral migrations (safe to run on every startup).
-for (const sql of ["ALTER TABLE users ADD COLUMN referral_code TEXT", "ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id)"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes('duplicate column')) throw e; } }
+for (const sql of ["ALTER TABLE users ADD COLUMN referral_code TEXT", "ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id)", "ALTER TABLE users ADD COLUMN public_id TEXT"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes('duplicate column')) throw e; } }
 // Tournament economy migrations (safe to run on every startup).
 for (const sql of [
   "ALTER TABLE matches ADD COLUMN prize_mode TEXT NOT NULL DEFAULT 'fixed'",
@@ -68,9 +68,16 @@ for(const row of db.prepare("SELECT id,name FROM games WHERE name NOT IN ('Ludo'
   }
 }
 db.prepare('INSERT OR IGNORE INTO rules(id,content) VALUES(1,?)').run('1. Be respectful to all players.\n2. Join before the match starts.\n3. Do not use cheats or exploits.\n4. Admin decisions are final.');
-for(const [k,v] of [['app_name','ZYROX ARENA'],['support_contact','support@zyroxarena.local'],['deposit_instructions','Send payment manually and submit your transaction reference. Admin approval is required.'],['withdrawal_minimum','50'],['referral_enabled','true'],['referral_commission_percent','1'],['referral_bonus','0']]) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k,v);
+for(const [k,v] of [['app_name','ZYROX ARENA'],['support_contact','@bdsupportzyrox01'],['payment_method','1. Nagad / 2. bKash'],['payment_account','1. 01730649062 / 2. 01742166737'],['deposit_instructions','Send payment manually and submit your transaction reference. Admin approval is required.'],['withdrawal_minimum','50'],['referral_enabled','true'],['referral_commission_percent','1'],['referral_bonus','0']]) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k,v);
 module.exports=db;
 
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)');
+// Backfill unique six-digit public user IDs without changing internal database IDs or foreign keys.
+const usedPublicIds = new Set(db.prepare('SELECT public_id FROM users WHERE public_id IS NOT NULL').all().map(x=>String(x.public_id)));
+for (const u of db.prepare('SELECT id FROM users WHERE public_id IS NULL OR public_id=\'\'').all()) {
+  let code; do { code=String(100000+Math.floor(Math.random()*900000)); } while (usedPublicIds.has(code));
+  usedPublicIds.add(code); db.prepare('UPDATE users SET public_id=? WHERE id=?').run(code,u.id);
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users(public_id)');
 // Backfill stable referral codes for existing accounts.
 for (const u of db.prepare('SELECT id FROM users WHERE referral_code IS NULL OR referral_code=\'\'').all()) { const code='Z'+String(u.id).padStart(7,'0'); db.prepare('UPDATE users SET referral_code=? WHERE id=?').run(code,u.id); }
