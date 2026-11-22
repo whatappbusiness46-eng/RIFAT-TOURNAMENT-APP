@@ -1,4 +1,4 @@
-# GitHub → Render Free → Expo Android APK
+# GitHub → Render → Supabase PostgreSQL → Expo Android APK
 
 ## 1. GitHub
 
@@ -7,7 +7,7 @@
    service-role keys, JWT secrets, or signing keys.
 3. Keep `server/`, `expo-app/`, `docs/`, `render.yaml`, and all assets.
 
-## 2. Render Free — demo deployment only with the current backend
+## 2. Render — API deployment with Supabase PostgreSQL
 
 1. In Render, choose **New → Blueprint** and connect the GitHub repository.
 2. Review the `rifat-tournament-app` service from `render.yaml`.
@@ -17,12 +17,12 @@
 5. A successful health response confirms the process is reachable, not that the
    financial database is durable.
 
-**Important:** current backend storage is SQLite. The Blueprint points it at `/tmp`,
-which is ephemeral on Render Free. Restart/redeploy can erase data. The user's
-separately hosted database cannot be connected until its provider is identified and
-the SQLite data layer is migrated. `DATABASE_URL` is not currently supported.
-Do not use this deployment for real-money wallet, deposits, withdrawals, paid entries,
-or prize payouts.
+**Database:** In Render → Environment, set `DATABASE_URL` to the Supabase
+Session Pooler connection string. Keep it secret and server-side only. The Blueprint
+declares `DATABASE_URL` as a non-synchronized secret. Never place this value in Expo
+configuration or commit it to GitHub. Confirm `/api/health`, then run the PostgreSQL
+smoke test against a disposable database and verify the financial workflows before
+accepting real deposits, withdrawals, paid entries, or prize payouts.
 
 ## 3. Configure Expo API URL
 
@@ -55,13 +55,14 @@ The `preview` profile is configured to produce an APK. Download the artifact fro
 the EAS build page after the remote build succeeds. The `production` profile currently
 produces an Android App Bundle (AAB), not an APK.
 
-## 6. External database integration gate
+## 6. PostgreSQL verification gate
 
-Before financial production use, provide the database provider name and confirm its
-engine. The current synchronous SQLite adapter must be migrated to that provider,
-including schema, indexes, migrations, and atomic wallet/tournament transactions.
-Then test on a disposable hosted database and verify backup/restore and persistence
-after a Render redeploy. See `DATABASE-CONNECTION-BLOCKER.md`.
+The backend now uses Supabase PostgreSQL through `DATABASE_URL`. Before financial
+production use, run the smoke test with `TEST_DATABASE_URL` pointed at a disposable
+PostgreSQL database. Exercise login/register, deposit approval, withdrawal rejection,
+concurrent paid match joins, cancellation refunds, referral credits, and one-time
+tournament payouts. Configure Supabase backups and test restore. See
+`DATABASE-CONNECTION-BLOCKER.md`.
 
 ## Per-match rules and regulations
 Each tournament/match now stores its own `rules` text. Admins can enter or edit this text in the Create Match / Edit Match forms. Players see that match's rules from its VIEW MATCH action. The existing global Rules page remains separate; changing it does not overwrite individual match rules.
