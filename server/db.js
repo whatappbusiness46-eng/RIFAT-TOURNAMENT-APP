@@ -94,14 +94,14 @@ async function init() {
     );
     CREATE TABLE IF NOT EXISTS match_players (
       id BIGSERIAL PRIMARY KEY, match_id BIGINT REFERENCES matches(id) ON DELETE CASCADE,
-      user_id BIGINT REFERENCES users(id), joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      user_id BIGINT REFERENCES users(id), joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), game_name_1 TEXT NOT NULL DEFAULT '', game_name_2 TEXT NOT NULL DEFAULT '',
       UNIQUE(match_id, user_id)
     );
     CREATE TABLE IF NOT EXISTS transactions (
       id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id), type TEXT NOT NULL,
       amount BIGINT NOT NULL CHECK(amount > 0), status TEXT NOT NULL DEFAULT 'pending',
       reference TEXT, note TEXT DEFAULT '', admin_id BIGINT REFERENCES users(id),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), processed_at TIMESTAMPTZ
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), processed_at TIMESTAMPTZ, sender_number TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS results (
       id BIGSERIAL PRIMARY KEY, match_id BIGINT REFERENCES matches(id), user_id BIGINT REFERENCES users(id),
@@ -134,6 +134,8 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_match_players_user ON match_players(user_id, match_id);
     CREATE INDEX IF NOT EXISTS idx_referral_earnings_referrer ON referral_earnings(referrer_id, created_at DESC);
   `);
+
+  await pool.query(`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_1 TEXT NOT NULL DEFAULT ''; ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_2 TEXT NOT NULL DEFAULT ''; ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sender_number TEXT NOT NULL DEFAULT '';`);
 
   const games = [
     ['Ludo', ['Classic','Quick','Tournament']],

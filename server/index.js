@@ -137,13 +137,13 @@ async function start(){
   app.delete('/api/admin/home-videos/:id',wrap(async(q,s)=>{await db.exec('DELETE FROM home_videos WHERE id=?',[integer(q.params.id,'ID',1)]);s.json({ok:true});}));
 
   app.get('/api/matches',wrap(async(q,s)=>{
-    const rows=await db.many(`SELECT m.*,g.name game,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
+    const rows=await db.many(`SELECT m.*,CASE WHEN m.status='upcoming' AND m.starts_at<=NOW() THEN 'live' ELSE m.status END AS status,g.name game,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
       FROM matches m JOIN games g ON g.id=m.game_id JOIN modes mo ON mo.id=m.mode_id
       WHERE m.status IN ('upcoming','live','completed') ORDER BY m.starts_at`);
     s.json(rows.map(m=>({...m,room_password:undefined,room_id:undefined})));
   }));
   app.get('/api/matches/:id',auth,wrap(async(q,s)=>{
-    const m=await db.one(`SELECT m.*,g.name game,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
+    const m=await db.one(`SELECT m.*,CASE WHEN m.status='upcoming' AND m.starts_at<=NOW() THEN 'live' ELSE m.status END AS status,g.name game,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
       FROM matches m JOIN games g ON g.id=m.game_id JOIN modes mo ON mo.id=m.mode_id WHERE m.id=?`,[q.params.id]);
     if(!m)return s.status(404).json({error:'Match not found'});
     const joined=!!await db.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[m.id,q.user.id]);
@@ -152,9 +152,15 @@ async function start(){
   app.get('/api/matches/:id/results',auth,wrap(async(q,s)=>s.json(await db.many('SELECT r.rank,r.prize,u.name FROM results r JOIN users u ON u.id=r.user_id WHERE r.match_id=? ORDER BY r.rank',[q.params.id]))));
   app.post('/api/matches/:id/join',auth,wrap(async(q,s)=>{
     const id=integer(q.params.id,'Match ID',1);
+    const name1=String(q.body.game_name_1||'').trim().slice(0,40);
+    const name2=String(q.body.game_name_2||'').trim().slice(0,40);
     await db.transaction(async tx=>{
       const m=await tx.one('SELECT * FROM matches WHERE id=? FOR UPDATE',[id]);
       if(!m||m.status!=='upcoming'||new Date(m.starts_at).getTime()<=Date.now())throw new Error('Match is not open for joining');
+      const isDuo=/duo/i.test(String((await tx.one('SELECT name FROM modes WHERE id=?',[m.mode_id]))?.name||''));
+      if(!name1)throw new Error('Game Name is required');
+      if(isDuo&&!name2)throw new Error('Duo requires both players Game Names');
+      if(!isDuo&&name2)throw new Error('Solo match requires only one Game Name');
       const count=await tx.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id]);
       if(count.n>=m.player_limit)throw new Error('Match is full');
       if(await tx.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[id,q.user.id]))throw new Error('Already joined');
@@ -165,7 +171,7 @@ async function start(){
         if(!debit.rowCount)throw new Error('Insufficient wallet balance');
         await tx.exec("INSERT INTO transactions(user_id,type,amount,status,note) VALUES(?,'entry',?,'approved',?)",[q.user.id,m.entry_fee,`Entry fee for match #${id}`]);
       }
-      await tx.exec('INSERT INTO match_players(match_id,user_id) VALUES(?,?)',[id,q.user.id]);
+      await tx.exec('INSERT INTO match_players(match_id,user_id,game_name_1,game_name_2) VALUES(?,?,?,?)',[id,q.user.id,name1,name2]);
     });
     s.json({ok:true,message:'Successfully joined match'});
   }));
@@ -182,8 +188,9 @@ async function start(){
   app.post('/api/wallet/deposit',auth,wrap(async(q,s)=>{
     const amount=integer(q.body.amount,'Amount',1);if(amount>1000000)throw new Error('Amount exceeds limit');
     const ref=String(q.body.reference||'').trim();if(ref.length<4)throw new Error('Payment reference is required');
-    const x=await db.one("INSERT INTO transactions(user_id,type,amount,status,reference,note) SELECT ?,'deposit',?,'pending',?,? WHERE NOT EXISTS(SELECT 1 FROM transactions WHERE user_id=? AND type='deposit' AND reference=?) RETURNING id",
-      [q.user.id,amount,ref,String(q.body.note||'').slice(0,200),q.user.id,ref]);
+    const sender=String(q.body.sender_number||'').replace(/[\s-]/g,'').trim();if(!/^\+?\d{8,15}$/.test(sender))throw new Error('Valid sender mobile number is required');
+    const x=await db.one("INSERT INTO transactions(user_id,type,amount,status,reference,note,sender_number) SELECT ?,'deposit',?,'pending',?,?,? WHERE NOT EXISTS(SELECT 1 FROM transactions WHERE user_id=? AND type='deposit' AND reference=?) RETURNING id",
+      [q.user.id,amount,ref,String(q.body.note||'').slice(0,200),sender,q.user.id,ref]);
     if(!x)throw new Error('This payment reference was already submitted');
     s.status(201).json({ok:true,id:x.id,message:'Deposit request submitted for review'});
   }));
@@ -203,7 +210,7 @@ async function start(){
   app.get('/api/rules',wrap(async(q,s)=>s.json(await db.one('SELECT content FROM rules WHERE id=1'))));
   app.get('/api/notifications',auth,wrap(async(q,s)=>s.json(await db.many('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50',[q.user.id]))));
 
-  app.get('/api/admin/matches',wrap(async(q,s)=>s.json(await db.many(`SELECT m.*,g.name game,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
+  app.get('/api/admin/matches',wrap(async(q,s)=>s.json(await db.many(`SELECT m.*,CASE WHEN m.status='upcoming' AND m.starts_at<=NOW() THEN 'live' ELSE m.status END AS status,g.name game,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
     FROM matches m JOIN games g ON g.id=m.game_id JOIN modes mo ON mo.id=m.mode_id ORDER BY m.starts_at`))));
   app.get('/api/admin/dashboard',wrap(async(q,s)=>{
     const [players,matches,pending,prizePaid,walletLiability]=await Promise.all([
@@ -296,7 +303,7 @@ async function start(){
     });
     s.json({ok:true});
   }));
-  app.get('/api/admin/matches/:id/players',wrap(async(q,s)=>s.json(await db.many('SELECT u.id,u.name,u.email,p.joined_at FROM match_players p JOIN users u ON u.id=p.user_id WHERE p.match_id=?',[q.params.id]))));
+  app.get('/api/admin/matches/:id/players',wrap(async(q,s)=>s.json(await db.many('SELECT u.id,u.name,u.email,p.joined_at,p.game_name_1,p.game_name_2 FROM match_players p JOIN users u ON u.id=p.user_id WHERE p.match_id=?',[q.params.id]))));
   app.patch('/api/admin/matches/:id/room',wrap(async(q,s)=>{
     await db.exec('UPDATE matches SET room_id=?,room_password=?,room_released=? WHERE id=?',[String(q.body.room_id||''),String(q.body.room_password||''),!!q.body.released,integer(q.params.id,'ID',1)]);s.json({ok:true});
   }));
