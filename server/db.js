@@ -65,7 +65,8 @@ async function init() {
     );
     CREATE TABLE IF NOT EXISTS wallets (
       user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      balance BIGINT NOT NULL DEFAULT 0 CHECK (balance >= 0)
+      balance BIGINT NOT NULL DEFAULT 0 CHECK (balance >= 0),
+      winning_balance BIGINT NOT NULL DEFAULT 0 CHECK (winning_balance >= 0)
     );
     CREATE TABLE IF NOT EXISTS games (
       id BIGSERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE
@@ -77,7 +78,7 @@ async function init() {
       UNIQUE(game_id, name)
     );
     CREATE TABLE IF NOT EXISTS home_videos (
-      id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, youtube_url TEXT NOT NULL, image_url TEXT NOT NULL DEFAULT '', click_url TEXT NOT NULL DEFAULT '',
+      id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, youtube_url TEXT NOT NULL,
       active BOOLEAN NOT NULL DEFAULT TRUE, sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -94,14 +95,14 @@ async function init() {
     );
     CREATE TABLE IF NOT EXISTS match_players (
       id BIGSERIAL PRIMARY KEY, match_id BIGINT REFERENCES matches(id) ON DELETE CASCADE,
-      user_id BIGINT REFERENCES users(id), joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), game_name_1 TEXT NOT NULL DEFAULT '', game_name_2 TEXT NOT NULL DEFAULT '',
+      user_id BIGINT REFERENCES users(id), joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), game_name_1 TEXT NOT NULL DEFAULT '', game_name_2 TEXT NOT NULL DEFAULT '', team_number INTEGER,
       UNIQUE(match_id, user_id)
     );
     CREATE TABLE IF NOT EXISTS transactions (
       id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id), type TEXT NOT NULL,
       amount BIGINT NOT NULL CHECK(amount > 0), status TEXT NOT NULL DEFAULT 'pending',
       reference TEXT, note TEXT DEFAULT '', admin_id BIGINT REFERENCES users(id),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), processed_at TIMESTAMPTZ, sender_number TEXT NOT NULL DEFAULT ''
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), processed_at TIMESTAMPTZ, sender_number TEXT NOT NULL DEFAULT '', balance_source TEXT NOT NULL DEFAULT 'deposit'
     );
     CREATE TABLE IF NOT EXISTS results (
       id BIGSERIAL PRIMARY KEY, match_id BIGINT REFERENCES matches(id), user_id BIGINT REFERENCES users(id),
@@ -135,7 +136,7 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_referral_earnings_referrer ON referral_earnings(referrer_id, created_at DESC);
   `);
 
-  await pool.query(`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_1 TEXT NOT NULL DEFAULT ''; ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_2 TEXT NOT NULL DEFAULT ''; ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sender_number TEXT NOT NULL DEFAULT ''; ALTER TABLE home_videos ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''; ALTER TABLE home_videos ADD COLUMN IF NOT EXISTS click_url TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE wallets ADD COLUMN IF NOT EXISTS winning_balance BIGINT NOT NULL DEFAULT 0 CHECK (winning_balance >= 0); ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_1 TEXT NOT NULL DEFAULT ''; ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_2 TEXT NOT NULL DEFAULT ''; ALTER TABLE match_players ADD COLUMN IF NOT EXISTS team_number INTEGER; ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sender_number TEXT NOT NULL DEFAULT ''; ALTER TABLE transactions ADD COLUMN IF NOT EXISTS balance_source TEXT NOT NULL DEFAULT 'deposit';`);
 
   const games = [
     ['Ludo', ['Classic','Quick','Tournament']],

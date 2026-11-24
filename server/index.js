@@ -90,7 +90,7 @@ async function start(){
     const [matches,wins,total,referrals,leaderboard]=await Promise.all([
       db.one('SELECT COUNT(*)::int n FROM match_players WHERE user_id=?',[q.user.id]),
       db.one('SELECT COUNT(*)::int n FROM results WHERE user_id=? AND rank=1',[q.user.id]),
-      db.one('SELECT COALESCE(SUM(prize),0)::bigint n FROM results WHERE user_id=?',[q.user.id]),
+      db.one('SELECT winning_balance n FROM wallets WHERE user_id=?',[q.user.id]),
       db.one('SELECT COUNT(*)::int n FROM users WHERE referred_by=?',[q.user.id]),
       db.many('SELECT u.name,SUM(r.prize)::bigint prizes FROM results r JOIN users u ON u.id=r.user_id GROUP BY r.user_id,u.name ORDER BY prizes DESC LIMIT 20')
     ]);
@@ -116,22 +116,21 @@ async function start(){
     s.json({period,rows:rows.map((x,i)=>({...x,rank:i+1})),my_rank:mine<0?null:mine+1});
   }));
   app.get('/api/games',wrap(async(q,s)=>s.json(await db.many('SELECT g.id,g.name,g.active,m.id mode_id,m.name mode,m.image_url,m.is_free FROM games g LEFT JOIN modes m ON m.game_id=g.id AND m.active=TRUE WHERE g.active=TRUE ORDER BY g.id,m.id'))));
-  app.get('/api/home-content',wrap(async(q,s)=>s.json({videos:await db.many('SELECT id,title,youtube_url,image_url,click_url FROM home_videos WHERE active=TRUE ORDER BY sort_order,id DESC'),modes:await db.many('SELECT m.id,m.name,m.image_url,m.is_free,g.name game FROM modes m JOIN games g ON g.id=m.game_id WHERE m.active=TRUE AND g.active=TRUE ORDER BY g.id,m.id')})));
+  app.get('/api/home-content',wrap(async(q,s)=>s.json({videos:await db.many('SELECT id,title,youtube_url FROM home_videos WHERE active=TRUE ORDER BY sort_order,id DESC'),modes:await db.many('SELECT m.id,m.name,m.image_url,m.is_free,g.name game FROM modes m JOIN games g ON g.id=m.game_id WHERE m.active=TRUE AND g.active=TRUE ORDER BY g.id,m.id')})));
 
   app.use('/api/admin',auth,admin);
   app.get('/api/admin/home-content',wrap(async(q,s)=>s.json(await db.many('SELECT * FROM home_videos ORDER BY sort_order,id DESC'))));
   const isValidYouTubeVideoUrl=value=>{try{const u=new URL(String(value||''));if(u.protocol!=='https:')return false;const host=u.hostname.toLowerCase();if(!['youtube.com','www.youtube.com','m.youtube.com','youtu.be','www.youtu.be'].includes(host))return false;const id=(host.endsWith('youtu.be')?u.pathname.split('/').filter(Boolean)[0]:(u.pathname==='/watch'?u.searchParams.get('v'):u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]{11})(?:\/|$)/i)?.[1]));return /^[\w-]{11}$/.test(id||'')}catch{return false}};
-  const isHttpsUrl=value=>{try{return new URL(String(value||'')).protocol==='https:'}catch{return false}};
   app.post('/api/admin/home-videos',wrap(async(q,s)=>{
-    const title=String(q.body.title||'').trim(),imageUrl=String(q.body.image_url||'').trim(),clickUrl=String(q.body.click_url||q.body.youtube_url||'').trim();
-    if(!title||!isHttpsUrl(imageUrl)||!isHttpsUrl(clickUrl))throw new Error('Title, HTTPS image URL and HTTPS click URL are required');
-    const x=await db.one('INSERT INTO home_videos(title,youtube_url,image_url,click_url,sort_order) VALUES(?,?,?,?,?) RETURNING id',[title,clickUrl,imageUrl,clickUrl,Number(q.body.sort_order)||0]);
+    const title=String(q.body.title||'').trim(),url=String(q.body.youtube_url||'').trim();
+    if(!title||!isValidYouTubeVideoUrl(url))throw new Error('Valid YouTube video URL and title required');
+    const x=await db.one('INSERT INTO home_videos(title,youtube_url,sort_order) VALUES(?,?,?) RETURNING id',[title,url,Number(q.body.sort_order)||0]);
     s.status(201).json({id:x.id});
   }));
   app.patch('/api/admin/home-videos/:id',wrap(async(q,s)=>{
-    const fields=['title','youtube_url','image_url','click_url','active','sort_order'].filter(k=>q.body[k]!==undefined);
+    const fields=['title','youtube_url','active','sort_order'].filter(k=>q.body[k]!==undefined);
     if(!fields.length)throw new Error('No fields');
-    for(const k of ['image_url','click_url','youtube_url'])if(q.body[k]&&!isHttpsUrl(q.body[k]))throw new Error(`Invalid HTTPS URL: ${k}`);
+    if(q.body.youtube_url&&!isValidYouTubeVideoUrl(q.body.youtube_url))throw new Error('Invalid YouTube video URL');
     const values=fields.map(k=>k==='active'?!!q.body[k]:q.body[k]);values.push(integer(q.params.id,'ID',1));
     await db.exec(`UPDATE home_videos SET ${fields.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${values.length}`,values);
     s.json({ok:true});
@@ -149,7 +148,20 @@ async function start(){
       FROM matches m JOIN games g ON g.id=m.game_id JOIN modes mo ON mo.id=m.mode_id WHERE m.id=?`,[q.params.id]);
     if(!m)return s.status(404).json({error:'Match not found'});
     const joined=!!await db.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[m.id,q.user.id]);
-    s.json({...m,room_id:joined&&m.room_released?m.room_id:null,room_password:joined&&m.room_released?m.room_password:null,joined});
+    s.json({...m,joined_count:Number(m.joined)||0,room_id:joined&&m.room_released?m.room_id:null,room_password:joined&&m.room_released?m.room_password:null,joined});
+  }));
+  app.get('/api/matches/:id/joined-players',auth,wrap(async(q,s)=>{
+    const id=integer(q.params.id,'Match ID',1);
+    const m=await db.one(`SELECT m.id,m.player_limit,mo.name mode,(SELECT COUNT(*)::int FROM match_players p WHERE p.match_id=m.id) joined
+      FROM matches m JOIN modes mo ON mo.id=m.mode_id WHERE m.id=?`,[id]);
+    if(!m)return s.status(404).json({error:'Match not found'});
+    const isParticipant=!!await db.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[id,q.user.id]);
+    if(!isParticipant)return s.status(403).json({error:'Only players who joined this match can view the player list'});
+    const teamMode=/(clash squad|cs\s*4\s*vs\s*4|cs headshot|headshot|lone wolf|lose\s*(2|to)\s*win|reverse)/i.test(String(m.mode||''));
+    if(teamMode&&Number(m.joined)<Number(m.player_limit))return s.status(403).json({error:'Player list will be available when all slots are full'});
+    const players=await db.many(`SELECT ROW_NUMBER() OVER(ORDER BY p.id)::int AS join_number,u.name,p.game_name_1,p.game_name_2,p.joined_at
+      FROM match_players p JOIN users u ON u.id=p.user_id WHERE p.match_id=? ORDER BY p.id`,[id]);
+    s.json({players,joined:Number(m.joined),player_limit:Number(m.player_limit),mode:m.mode});
   }));
   app.get('/api/matches/:id/results',auth,wrap(async(q,s)=>s.json(await db.many('SELECT r.rank,r.prize,u.name FROM results r JOIN users u ON u.id=r.user_id WHERE r.match_id=? ORDER BY r.rank',[q.params.id]))));
   app.post('/api/matches/:id/join',auth,wrap(async(q,s)=>{
@@ -184,8 +196,8 @@ async function start(){
     s.json(rows.map(m=>m.room_released?m:{...m,room_id:null,room_password:null}));
   }));
   app.get('/api/wallet',auth,wrap(async(q,s)=>{
-    const [w,transactions]=await Promise.all([db.one('SELECT balance FROM wallets WHERE user_id=?',[q.user.id]),db.many('SELECT * FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 100',[q.user.id])]);
-    s.json({balance:w?.balance||0,transactions});
+    const [w,transactions]=await Promise.all([db.one('SELECT balance,winning_balance FROM wallets WHERE user_id=?',[q.user.id]),db.many('SELECT * FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 100',[q.user.id])]);
+    s.json({balance:w?.balance||0,winning_balance:w?.winning_balance||0,transactions});
   }));
   app.post('/api/wallet/deposit',auth,wrap(async(q,s)=>{
     const amount=integer(q.body.amount,'Amount',1);if(amount>1000000)throw new Error('Amount exceeds limit');
@@ -201,11 +213,11 @@ async function start(){
     if(amount<min)throw new Error(`Minimum withdrawal is ${min}`);
     const details=String(q.body.payment_details||'').trim();if(details.length<5)throw new Error('Payment account details are required');
     await db.transaction(async tx=>{
-      const w=await tx.one('SELECT balance FROM wallets WHERE user_id=? FOR UPDATE',[q.user.id]);
-      if(!w||Number(w.balance)<amount)throw new Error('Insufficient balance');
-      const debit=await tx.exec('UPDATE wallets SET balance=balance-? WHERE user_id=? AND balance>=?',[amount,q.user.id,amount]);
-      if(!debit.rowCount)throw new Error('Insufficient balance');
-      await tx.exec("INSERT INTO transactions(user_id,type,amount,status,note) VALUES(?,'withdrawal',?,'pending',?)",[q.user.id,amount,details.slice(0,200)]);
+      const w=await tx.one('SELECT winning_balance FROM wallets WHERE user_id=? FOR UPDATE',[q.user.id]);
+      if(!w||Number(w.winning_balance)<amount)throw new Error('Insufficient Winning Balance. Deposit balance cannot be withdrawn. Play a match and earn prizes first.');
+      const debit=await tx.exec('UPDATE wallets SET winning_balance=winning_balance-? WHERE user_id=? AND winning_balance>=?',[amount,q.user.id,amount]);
+      if(!debit.rowCount)throw new Error('Insufficient Winning Balance');
+      await tx.exec("INSERT INTO transactions(user_id,type,amount,status,note,balance_source) VALUES(?,'withdrawal',?,'pending',?,'winning')",[q.user.id,amount,details.slice(0,200)]);
     });
     s.status(201).json({ok:true,message:'Withdrawal request submitted; amount reserved'});
   }));
@@ -332,7 +344,7 @@ async function start(){
     const id=integer(q.params.id,'Match ID',1),winners=q.body.winners;if(!Array.isArray(winners)||!winners.length)throw new Error('Add at least one ranked player');
     const result=await db.transaction(async tx=>{
       const m=await tx.one('SELECT * FROM matches WHERE id=? FOR UPDATE',[id]);
-      if(!m)throw new Error('Match not found');if(m.payouts_published)throw new Error('Payouts have already been published for this match');if(m.status==='cancelled')throw new Error('Cancelled match cannot publish results');
+      if(!m)throw new Error('Match not found');if(/(clash squad|cs\s*4\s*vs\s*4|cs headshot|headshot|lone wolf|lose\s*(2|to)\s*win|reverse)/i.test(String((await tx.one('SELECT name FROM modes WHERE id=?',[m.mode_id]))?.name||'')))throw new Error('CS/LW matches must use SET TEAMS / PAY WINNER');if(m.payouts_published)throw new Error('Payouts have already been published for this match');if(m.status==='cancelled')throw new Error('Cancelled match cannot publish results');
       const joined=(await tx.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id])).n,gross=Number(m.prize_pool),platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee;
       const parsed=winners.map(w=>({user_id:integer(w.user_id,'Player ID',1),rank:integer(w.rank,'Rank',1),kills:integer(w.kills||0,'Kills'),manual_prize:w.prize===undefined?null:integer(w.prize,'Prize')}));
       const seen=new Set();for(const w of parsed){if(seen.has(String(w.user_id)))throw new Error('Duplicate player in result');seen.add(String(w.user_id));if(!await tx.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[id,w.user_id]))throw new Error('Every result player must have joined the match');}
@@ -344,7 +356,7 @@ async function start(){
         totalPaid+=payout;
         await tx.exec('INSERT INTO results(match_id,user_id,rank,prize,kills) VALUES(?,?,?,?,?)',[id,w.user_id,w.rank,payout,w.kills]);
         if(payout>0){
-          await tx.exec('UPDATE wallets SET balance=balance+? WHERE user_id=?',[payout,w.user_id]);
+          await tx.exec('UPDATE wallets SET winning_balance=winning_balance+? WHERE user_id=?',[payout,w.user_id]);
           await tx.exec("INSERT INTO transactions(user_id,type,amount,status,reference,note,admin_id) VALUES(?,'prize',?,'approved',?,?,?)",[w.user_id,payout,`match:${id}:player:${w.user_id}`,`Automated match #${id}: rank ৳${rankShare} + ${w.kills} kills × ৳${m.kill_reward}`,q.user.id]);
         }
       }
@@ -356,6 +368,35 @@ async function start(){
     });
     s.json({ok:true,...result,message:'Results and wallet prizes published exactly once'});
   }));
+  app.post('/api/admin/matches/:id/team-payout',wrap(async(q,s)=>{
+    const id=integer(q.params.id,'Match ID',1),teams=q.body.teams,winningTeam=integer(q.body.winning_team,'Winning team',1);
+    if(!Array.isArray(teams)||teams.length<2||teams.some(t=>!Array.isArray(t)||!t.length))throw new Error('Provide at least two non-empty teams');
+    const result=await db.transaction(async tx=>{
+      const m=await tx.one('SELECT m.*,mo.name mode FROM matches m JOIN modes mo ON mo.id=m.mode_id WHERE m.id=? FOR UPDATE',[id]);
+      if(!m)throw new Error('Match not found');
+      if(!/(clash squad|cs\s*4\s*vs\s*4|cs headshot|headshot|lone wolf|lose\s*(2|to)\s*win|reverse)/i.test(String(m.mode)))throw new Error('Team payout is only for CS and LW modes');
+      if(m.payouts_published||m.status==='cancelled')throw new Error('Match is already paid or cancelled');
+      if(winningTeam>teams.length)throw new Error('Winning team number is invalid');
+      const players=await tx.many('SELECT user_id FROM match_players WHERE match_id=? ORDER BY id',[id]);
+      if(players.length!==Number(m.player_limit))throw new Error('All player slots must be full before team payout');
+      const all=teams.flat().map(x=>integer(x,'Player ID',1));
+      if(new Set(all.map(String)).size!==all.length)throw new Error('A player cannot be assigned to more than one team');
+      const joined=new Set(players.map(x=>String(x.user_id)));
+      if(all.length!==players.length||all.some(x=>!joined.has(String(x))))throw new Error('Every joined player must be assigned to exactly one team');
+      for(let i=0;i<teams.length;i++)for(const uid of teams[i])await tx.exec('UPDATE match_players SET team_number=? WHERE match_id=? AND user_id=?',[i+1,id,integer(uid,'Player ID',1)]);
+      const gross=Number(m.prize_pool),fee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-fee,winners=teams[winningTeam-1];
+      const base=Math.floor(net/winners.length),remainder=net%winners.length;let paid=0;
+      for(let i=0;i<winners.length;i++){
+        const uid=integer(winners[i],'Player ID',1),amount=base+(i<remainder?1:0),rank=i+1;
+        await tx.exec('INSERT INTO results(match_id,user_id,rank,prize,kills) VALUES(?,?,?,?,0)',[id,uid,rank,amount]);
+        if(amount>0){await tx.exec('UPDATE wallets SET winning_balance=winning_balance+? WHERE user_id=?',[amount,uid]);await tx.exec("INSERT INTO transactions(user_id,type,amount,status,reference,note,admin_id) VALUES(?,'prize',?,'approved',?,?,?)",[uid,amount,`match:${id}:player:${uid}`,`CS/LW team ${winningTeam} winner: equal share from ৳${net}`,q.user.id]);}
+        paid+=amount;
+      }
+      const upd=await tx.exec("UPDATE matches SET status='completed',payouts_published=TRUE WHERE id=? AND payouts_published=FALSE",[id]);if(!upd.rowCount)throw new Error('Payout already published');
+      return {teams:teams.length,winners:winners.length,platform_fee:fee,net_prize:net,total_paid:paid};
+    });
+    s.json({ok:true,...result,message:'Team prize divided equally and credited exactly once'});
+  }));
   app.get('/api/admin/transactions',wrap(async(q,s)=>s.json(await db.many('SELECT t.*,u.name,u.email FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC'))));
   app.post('/api/admin/transactions/:id/decision',wrap(async(q,s)=>{
     const id=integer(q.params.id,'Transaction ID',1),status=q.body.status;if(!['approved','rejected'].includes(status))throw new Error('Invalid decision');
@@ -363,7 +404,7 @@ async function start(){
       const t=await tx.one('SELECT * FROM transactions WHERE id=? FOR UPDATE',[id]);
       if(!t||t.status!=='pending')throw new Error('Request already processed or missing');
       if(t.type==='deposit'&&status==='approved')await tx.exec('UPDATE wallets SET balance=balance+? WHERE user_id=?',[t.amount,t.user_id]);
-      if(t.type==='withdrawal'&&status==='rejected')await tx.exec('UPDATE wallets SET balance=balance+? WHERE user_id=?',[t.amount,t.user_id]);
+      if(t.type==='withdrawal'&&status==='rejected'){if(t.balance_source==='winning')await tx.exec('UPDATE wallets SET winning_balance=winning_balance+? WHERE user_id=?',[t.amount,t.user_id]);else await tx.exec('UPDATE wallets SET balance=balance+? WHERE user_id=?',[t.amount,t.user_id]);}
       const updated=await tx.exec("UPDATE transactions SET status=?,admin_id=?,processed_at=NOW() WHERE id=? AND status='pending'",[status,q.user.id,id]);
       if(!updated.rowCount)throw new Error('Request already processed or missing');
     });
