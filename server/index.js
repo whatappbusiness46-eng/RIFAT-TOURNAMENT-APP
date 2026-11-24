@@ -240,7 +240,7 @@ async function start(){
     if(!b.title||!b.starts_at)throw new Error('Title and start date required');
     const game=await db.one('SELECT id FROM games WHERE id=?',[b.game_id]),mode=await db.one('SELECT id,rules FROM modes WHERE id=? AND game_id=?',[b.mode_id,b.game_id]);
     if(!game||!mode)throw new Error('Select a valid game and mode');
-    const prizeMode=b.prize_mode==='entry_pool'?'entry_pool':'fixed',feePct=Number(b.platform_fee_percent||0);
+    const prizeMode=b.prize_mode==='entry_pool'?'entry_pool':'fixed',feePct=Number(b.platform_fee_percent===undefined||b.platform_fee_percent===null||b.platform_fee_percent===''?20:b.platform_fee_percent);
     if(!Number.isFinite(feePct)||feePct<0||feePct>30)throw new Error('Platform fee must be between 0 and 30 percent');
     const killReward=integer(b.kill_reward||0,'Per-kill reward'),split=Array.isArray(b.prize_split)?b.prize_split.map(x=>integer(x,'Rank prize amount')):[50,30,20];
     if(!split.length||split.some(x=>x<0))throw new Error('Rank prize amounts must be zero or greater');
@@ -310,20 +310,20 @@ async function start(){
   app.get('/api/admin/matches/:id/calculator',wrap(async(q,s)=>{
     const id=integer(q.params.id,'Match ID',1),m=await db.one('SELECT * FROM matches WHERE id=?',[id]);if(!m)throw new Error('Match not found');
     const [joinedRow,killsRow]=await Promise.all([db.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id]),db.one('SELECT COALESCE(SUM(kills),0)::bigint n FROM results WHERE match_id=?',[id])]);
-    const joined=joinedRow.n,gross=Number(m.entry_fee)*joined,platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee,kills=Number(killsRow.n),killPayout=kills*Number(m.kill_reward),splits=JSON.parse(m.prize_split_json||'[50,30,20]'),rankTotal=splits.reduce((a,x)=>a+x,0);
+    const joined=joinedRow.n,gross=Number(m.prize_pool),platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee,kills=Number(killsRow.n),killPayout=kills*Number(m.kill_reward),splits=JSON.parse(m.prize_split_json||'[50,30,20]'),rankTotal=splits.reduce((a,x)=>a+x,0);
     s.json({match_id:id,joined,entry_fee:m.entry_fee,gross_entry_fees:gross,platform_fee:platformFee,net_entry_pool:net,prize_mode:m.prize_mode,base_prize:rankTotal,kill_reward_per_kill:m.kill_reward,total_kills:kills,kill_payout:killPayout,estimated_total_payout:rankTotal+killPayout,rank_distribution:splits.map((amount,i)=>({rank:i+1,amount})),refund_on_cancel:!!m.refund_on_cancel,payouts_published:!!m.payouts_published,prize_split:splits});
   }));
   app.post('/api/admin/matches/:id/calculator/preview',wrap(async(q,s)=>{
     const id=integer(q.params.id,'Match ID',1),m=await db.one('SELECT * FROM matches WHERE id=?',[id]);if(!m)throw new Error('Match not found');if(m.payouts_published)throw new Error('Payouts already published');
     const winners=q.body.winners;if(!Array.isArray(winners)||!winners.length)throw new Error('Provide ranked players and kills');
-    const joined=(await db.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id])).n,gross=Number(m.entry_fee)*joined,platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee;
+    const joined=(await db.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id])).n,gross=Number(m.prize_pool),platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee;
     const rows=winners.map(w=>({user_id:integer(w.user_id,'Player ID',1),rank:integer(w.rank,'Rank',1),kills:integer(w.kills||0,'Kills'),manual_prize:w.prize===undefined?null:integer(w.prize,'Prize')}));
     const ids=new Set();for(const w of rows){if(ids.has(String(w.user_id)))throw new Error('Duplicate player');ids.add(String(w.user_id));if(!await db.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[id,w.user_id]))throw new Error('Player has not joined this match');}
     const totalKills=rows.reduce((a,w)=>a+w.kills,0),killPayout=totalKills*Number(m.kill_reward);
     if(m.prize_mode==='entry_pool'&&killPayout>net)throw new Error('Kill rewards exceed net entry pool');
-    if(m.prize_mode==='fixed'&&killPayout>Number(m.prize_pool))throw new Error('Kill rewards exceed fixed prize pool');
+    if(m.prize_mode==='fixed'&&killPayout>net)throw new Error('Kill rewards exceed fixed prize pool');
     const split=JSON.parse(m.prize_split_json||'[50,30,20]'),payouts=rows.map(w=>{const rankShare=w.manual_prize===null?(w.rank<=split.length?split[w.rank-1]:0):w.manual_prize;return {...w,rank_prize:rankShare,kill_prize:w.kills*Number(m.kill_reward),total_prize:rankShare+w.kills*Number(m.kill_reward)};});
-    const total=payouts.reduce((a,w)=>a+w.total_prize,0),budget=m.prize_mode==='entry_pool'?net:Number(m.prize_pool);if(total>budget)throw new Error('Payout exceeds available prize budget');
+    const total=payouts.reduce((a,w)=>a+w.total_prize,0),budget=net;if(total>budget)throw new Error('Payout exceeds available prize budget');
     s.json({joined,gross_entry_fees:gross,platform_fee:platformFee,net_entry_pool:net,total_kills:totalKills,kill_payout:killPayout,rank_budget:split.reduce((a,x)=>a+x,0),total_payout:total,payouts});
   }));
   app.post('/api/admin/matches/:id/results',wrap(async(q,s)=>{
@@ -331,7 +331,7 @@ async function start(){
     const result=await db.transaction(async tx=>{
       const m=await tx.one('SELECT * FROM matches WHERE id=? FOR UPDATE',[id]);
       if(!m)throw new Error('Match not found');if(m.payouts_published)throw new Error('Payouts have already been published for this match');if(m.status==='cancelled')throw new Error('Cancelled match cannot publish results');
-      const joined=(await tx.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id])).n,gross=Number(m.entry_fee)*joined,platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee;
+      const joined=(await tx.one('SELECT COUNT(*)::int n FROM match_players WHERE match_id=?',[id])).n,gross=Number(m.prize_pool),platformFee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-platformFee;
       const parsed=winners.map(w=>({user_id:integer(w.user_id,'Player ID',1),rank:integer(w.rank,'Rank',1),kills:integer(w.kills||0,'Kills'),manual_prize:w.prize===undefined?null:integer(w.prize,'Prize')}));
       const seen=new Set();for(const w of parsed){if(seen.has(String(w.user_id)))throw new Error('Duplicate player in result');seen.add(String(w.user_id));if(!await tx.one('SELECT 1 FROM match_players WHERE match_id=? AND user_id=?',[id,w.user_id]))throw new Error('Every result player must have joined the match');}
       const killPayout=parsed.reduce((a,w)=>a+w.kills*Number(m.kill_reward),0);
@@ -347,7 +347,7 @@ async function start(){
         }
       }
       if(m.prize_mode==='entry_pool'&&totalPaid>net)throw new Error('Calculated payouts exceed net entry pool; reduce prize split or per-kill reward');
-      if(m.prize_mode==='fixed'&&totalPaid>Number(m.prize_pool))throw new Error('Calculated payout exceeds configured prize and kill reward budget');
+      if(m.prize_mode==='fixed'&&totalPaid>net)throw new Error('Calculated payout exceeds configured prize and kill reward budget');
       const upd=await tx.exec("UPDATE matches SET status='completed',payouts_published=TRUE WHERE id=? AND payouts_published=FALSE",[id]);
       if(!upd.rowCount)throw new Error('Payouts have already been published for this match');
       return {total_paid:totalPaid,platform_fee:platformFee,kill_payout:killPayout};
