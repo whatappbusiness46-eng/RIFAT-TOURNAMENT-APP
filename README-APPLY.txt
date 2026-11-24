@@ -1,19 +1,41 @@
-ZYROX ARENA — EDITED FILES ONLY
+ZYROX ARENA – WALLET, JOINED PLAYERS, TEAM PAYOUT & 200 MATCHES
 
-Replace these files in your existing project, keeping the same folder paths:
-- expo-app/App.js
-- server/index.js
-- server/db.js
+FILES TO REPLACE
+1. expo-app/App.js
+2. server/index.js
+3. server/db.js
+4. package.json
 
-Then commit/push to GitHub and redeploy the Render backend. The database migration adds image_url and click_url to home_videos automatically at server startup.
+NEW FILE
+5. server/seed-tournaments.js
 
-Admin > Home Videos: add one item per banner using:
-1) Image HTTPS URL
-2) Click HTTPS URL (any HTTPS destination, including YouTube)
-3) Title and display order
+APPLY
+- Back up your current project and Supabase database first.
+- Copy the files above into the same paths in your project.
+- Keep your existing README.md; this ZIP has its own README-APPLY.txt.
+- Commit and push to GitHub. Deploy the backend on Render.
+- Database migration adds wallets.winning_balance, transactions.balance_source,
+  and match_players.team_number with ADD COLUMN IF NOT EXISTS.
+- After deployment, run `npm run check`.
+- To create the 200 tournament matches, run `npm run seed:tournaments` ONCE in Render Shell.
+  The seeder checks for existing ZYROX AUTO 2026- matches before inserting and skips duplicates.
+- Rebuild the APK after the frontend change.
 
-Add 2–3 entries (or more). Home displays them as an auto-scrolling image carousel; tapping an image opens its configured URL.
+FEATURES
+- Wallet shows separate Deposit/Entry Balance and Winning Balance.
+- Withdrawal API debits only Winning Balance. Pending withdrawals reserve it; rejection
+  returns the reserved amount to Winning Balance.
+- Match prizes are credited to Winning Balance.
+- JOINED PLAYERS appears below Rules & Regulations in match details. Only participants
+  can open the list. CS/LW list is available only after all slots are full.
+- Admin has SET TEAMS / PAY WINNER for CS/LW. Enter every joined player's user ID in the
+  team JSON and choose the winning team number. Net prize after commission is divided
+  equally among winning-team players. Payout is locked to one publication per match.
+- Individual PUBLISH WINNER is hidden for CS/LW, and the API rejects that route for CS/LW.
+- Admin tab loads are serialized to reduce overlapping requests.
 
-The local match reminder text is Bengali and includes password 11, plus instruction to open the app to see Room ID. Local notifications still require permission and a future match start time.
-
-Checks: npm run check PASS. npm test integration test SKIPPED because TEST_DATABASE_URL was not supplied. Live Render/database/APK tests have not been run.
+IMPORTANT
+- Deploying does NOT insert the 200 matches automatically. Run the seeder command.
+- Live Supabase/Render, production API, APK runtime, and real-device admin crash tests
+  have not been performed here. Static syntax and Expo asset checks passed.
+- Back up the database before deploying wallet/financial changes.
