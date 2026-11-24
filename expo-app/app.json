@@ -9,7 +9,10 @@
     "android": {
       "package": "com.zyroxarena.mobile",
       "versionCode": 1,
-      "permissions": [],
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/zyrox-app-icon.png",
         "backgroundColor": "#07111f"
@@ -24,6 +27,16 @@
     "icon": "./assets/zyrox-app-icon.png",
     "ios": {
       "bundleIdentifier": "com.zyroxarena.mobile"
-    }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/zyrox-app-icon.png",
+          "color": "#07111f",
+          "defaultChannel": "match-reminders"
+        }
+      ]
+    ]
   }
 }
