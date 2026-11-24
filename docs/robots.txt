@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://whatappbusiness46-eng.github.io/RIFAT-TOURNAMENT-APP/sitemap.xml
