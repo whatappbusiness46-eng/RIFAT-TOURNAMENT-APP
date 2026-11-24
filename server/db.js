@@ -77,7 +77,7 @@ async function init() {
       UNIQUE(game_id, name)
     );
     CREATE TABLE IF NOT EXISTS home_videos (
-      id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, youtube_url TEXT NOT NULL,
+      id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, youtube_url TEXT NOT NULL, image_url TEXT NOT NULL DEFAULT '', click_url TEXT NOT NULL DEFAULT '',
       active BOOLEAN NOT NULL DEFAULT TRUE, sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -135,7 +135,7 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_referral_earnings_referrer ON referral_earnings(referrer_id, created_at DESC);
   `);
 
-  await pool.query(`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_1 TEXT NOT NULL DEFAULT ''; ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_2 TEXT NOT NULL DEFAULT ''; ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sender_number TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_1 TEXT NOT NULL DEFAULT ''; ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_name_2 TEXT NOT NULL DEFAULT ''; ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sender_number TEXT NOT NULL DEFAULT ''; ALTER TABLE home_videos ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''; ALTER TABLE home_videos ADD COLUMN IF NOT EXISTS click_url TEXT NOT NULL DEFAULT '';`);
 
   const games = [
     ['Ludo', ['Classic','Quick','Tournament']],

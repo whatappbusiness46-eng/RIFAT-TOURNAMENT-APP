@@ -116,20 +116,22 @@ async function start(){
     s.json({period,rows:rows.map((x,i)=>({...x,rank:i+1})),my_rank:mine<0?null:mine+1});
   }));
   app.get('/api/games',wrap(async(q,s)=>s.json(await db.many('SELECT g.id,g.name,g.active,m.id mode_id,m.name mode,m.image_url,m.is_free FROM games g LEFT JOIN modes m ON m.game_id=g.id AND m.active=TRUE WHERE g.active=TRUE ORDER BY g.id,m.id'))));
-  app.get('/api/home-content',wrap(async(q,s)=>s.json({videos:await db.many('SELECT id,title,youtube_url FROM home_videos WHERE active=TRUE ORDER BY sort_order,id DESC'),modes:await db.many('SELECT m.id,m.name,m.image_url,m.is_free,g.name game FROM modes m JOIN games g ON g.id=m.game_id WHERE m.active=TRUE AND g.active=TRUE ORDER BY g.id,m.id')})));
+  app.get('/api/home-content',wrap(async(q,s)=>s.json({videos:await db.many('SELECT id,title,youtube_url,image_url,click_url FROM home_videos WHERE active=TRUE ORDER BY sort_order,id DESC'),modes:await db.many('SELECT m.id,m.name,m.image_url,m.is_free,g.name game FROM modes m JOIN games g ON g.id=m.game_id WHERE m.active=TRUE AND g.active=TRUE ORDER BY g.id,m.id')})));
 
   app.use('/api/admin',auth,admin);
   app.get('/api/admin/home-content',wrap(async(q,s)=>s.json(await db.many('SELECT * FROM home_videos ORDER BY sort_order,id DESC'))));
+  const isValidYouTubeVideoUrl=value=>{try{const u=new URL(String(value||''));if(u.protocol!=='https:')return false;const host=u.hostname.toLowerCase();if(!['youtube.com','www.youtube.com','m.youtube.com','youtu.be','www.youtu.be'].includes(host))return false;const id=(host.endsWith('youtu.be')?u.pathname.split('/').filter(Boolean)[0]:(u.pathname==='/watch'?u.searchParams.get('v'):u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]{11})(?:\/|$)/i)?.[1]));return /^[\w-]{11}$/.test(id||'')}catch{return false}};
+  const isHttpsUrl=value=>{try{return new URL(String(value||'')).protocol==='https:'}catch{return false}};
   app.post('/api/admin/home-videos',wrap(async(q,s)=>{
-    const title=String(q.body.title||'').trim(),url=String(q.body.youtube_url||'').trim();
-    if(!title||!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url))throw new Error('Valid YouTube URL and title required');
-    const x=await db.one('INSERT INTO home_videos(title,youtube_url,sort_order) VALUES(?,?,?) RETURNING id',[title,url,Number(q.body.sort_order)||0]);
+    const title=String(q.body.title||'').trim(),imageUrl=String(q.body.image_url||'').trim(),clickUrl=String(q.body.click_url||q.body.youtube_url||'').trim();
+    if(!title||!isHttpsUrl(imageUrl)||!isHttpsUrl(clickUrl))throw new Error('Title, HTTPS image URL and HTTPS click URL are required');
+    const x=await db.one('INSERT INTO home_videos(title,youtube_url,image_url,click_url,sort_order) VALUES(?,?,?,?,?) RETURNING id',[title,clickUrl,imageUrl,clickUrl,Number(q.body.sort_order)||0]);
     s.status(201).json({id:x.id});
   }));
   app.patch('/api/admin/home-videos/:id',wrap(async(q,s)=>{
-    const fields=['title','youtube_url','active','sort_order'].filter(k=>q.body[k]!==undefined);
+    const fields=['title','youtube_url','image_url','click_url','active','sort_order'].filter(k=>q.body[k]!==undefined);
     if(!fields.length)throw new Error('No fields');
-    if(q.body.youtube_url&&!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(q.body.youtube_url))throw new Error('Invalid YouTube URL');
+    for(const k of ['image_url','click_url','youtube_url'])if(q.body[k]&&!isHttpsUrl(q.body[k]))throw new Error(`Invalid HTTPS URL: ${k}`);
     const values=fields.map(k=>k==='active'?!!q.body[k]:q.body[k]);values.push(integer(q.params.id,'ID',1));
     await db.exec(`UPDATE home_videos SET ${fields.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${values.length}`,values);
     s.json({ok:true});
