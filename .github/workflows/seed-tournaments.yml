@@ -1,0 +1,28 @@
+
+name: Seed ZYROX ARENA tournaments
+
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --omit=dev
+
+      - name: Seed tournament matches
+        run: npm run seed:tournaments
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGSSLMODE: require
+          
