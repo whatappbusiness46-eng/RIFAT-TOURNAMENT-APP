@@ -1,45 +1,25 @@
-ZYROX ARENA — DOWNLOAD WEBSITE + RENDER HEALTH CHECK
+# ZYROX ARENA PostgreSQL migration bundle
 
-This ZIP contains:
-- docs/: static GitHub Pages download website
-- .github/workflows/render-health-check.yml: scheduled request to
-  https://rifat-tournament-app.onrender.com/api/health every 14 minutes
-  (plus a manual Run workflow option)
+## Included files
+- `server/reset-database.js` — explicit one-time full database wipe and default-data reinitialization.
+- `server/seed-tournaments.js` — creates 200 matches, fills every match's Rules & Regulations, and sorts matches into adjacent pairs with identical entry fees.
+- `APPLY-GUIDE.txt` — safe manual application instructions.
 
-HOW TO ADD WITHOUT DELETING EXISTING FILES
-1. Extract this ZIP.
-2. Upload/merge docs/ into your repository's existing docs/ folder.
-   Do not delete any existing docs files.
-3. Upload/merge .github/workflows/render-health-check.yml into the
-   existing .github/workflows/ folder. Do not replace your existing
-   seed-tournaments.yml or other workflows.
-4. Commit both folders to the main branch.
-5. In GitHub, open Actions and confirm "Render health check" is enabled.
-   Use Run workflow once to test it manually.
-6. For the website: Repository Settings -> Pages -> Deploy from a branch
-   -> main -> /docs -> Save.
-7. Create a GitHub Release and attach the properly signed APK using the
-   exact filename ZYROX-ARENA.apk. The website's download button expects
-   that asset name.
+## Important
+The reset permanently deletes users, wallets, deposits, withdrawals, transaction history, joined-player records, matches, results, notifications, home videos, rules, and settings in the database named by `DATABASE_URL`.
+It is not run automatically by Render or when the app starts.
+Do not run it unless you intentionally want to erase all production data.
 
-EXPECTED WEBSITE URL
-https://whatappbusiness46-eng.github.io/RIFAT-TOURNAMENT-APP/
+## Apply
+1. Upload/replace `server/reset-database.js` and `server/seed-tournaments.js` in the GitHub repository.
+2. Make sure Render's `DATABASE_URL` points to the intended Supabase production database.
+3. Run the reset manually once from a trusted shell/environment with:
+   `CONFIRM_ZYROX_FULL_RESET=YES node server/reset-database.js`
+4. After reset succeeds, seed the 200 tournaments:
+   `npm run seed:tournaments`
+5. Check Render logs and database records before announcing completion.
 
-IMPORTANT ABOUT THE 14-MINUTE REQUEST
-- The workflow requests /api/health, not the website root.
-- GitHub scheduled workflows are not guaranteed to start at the exact minute;
-  GitHub may delay or skip scheduled runs, especially during high load.
-- This may keep a Render Free web service from idling if requests arrive
-  frequently enough, but it is NOT guaranteed and may not be consistent
-  with the intended idle behavior of a free service. Render may still
-  sleep, restart, or change its policies. For reliable always-on service,
-  use an appropriate paid Render instance.
-- This is a health check only. It does not prove database transactions,
-  wallet correctness, or full application health.
-- If /api/health does not return HTTP 2xx, the workflow will fail. Verify
-  that endpoint in your deployed backend first.
+Do not run the seed workflow twice. The seeder skips if it detects existing `ZYROX AUTO 2026-` matches.
 
-PLAY PROTECT
-This package does not disable Play Protect or bypass Android security.
-Use a correctly signed, verified APK. A website or scheduled ping cannot
-remove a Play Protect warning.
+## Preserved tournament settings
+The original entry fees, prize pools, player limits, kill rewards, and prize splits are preserved. Only ordering is changed so equal entry fees are adjacent. If a fee has an odd number of matches, seeding stops rather than changing any fee.
