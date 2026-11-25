@@ -1,0 +1,62 @@
+ZYROX ARENA — COMPLETE UPDATE PACKAGE
+
+FILES AND DESTINATIONS
+1) server/reset-database.js       -> replace existing server/reset-database.js
+2) server/seed-tournaments.js     -> replace existing server/seed-tournaments.js
+3) .github/workflows/reset-and-seed.yml -> add in .github/workflows/
+4) docs/index.html                -> replace existing docs/index.html
+5) docs/robots.txt                -> replace existing docs/robots.txt
+6) docs/sitemap.xml               -> replace existing docs/sitemap.xml
+
+BEFORE RUNNING THE RESET WORKFLOW
+A. In GitHub repository Settings > Secrets and variables > Actions, add:
+   - DATABASE_URL (Supabase PostgreSQL connection string)
+   - ADMIN_EMAIL (the admin login email you want after reset)
+   - ADMIN_PASSWORD (strong password, at least 12 characters)
+   - ADMIN_NAME (optional; e.g. Administrator)
+B. Verify DATABASE_URL points to the intended production database.
+C. Commit all files at the exact paths above.
+D. Open Actions > "ZYROX ARENA - Full database reset and tournament setup".
+E. Run workflow, type YES, then confirm.
+
+WARNING: The workflow permanently deletes all app users, wallet balances, deposits,
+withdrawals, transactions, match joins, matches, results, notifications, home videos,
+rules and settings. It recreates default settings and the admin account, then seeds
+200 matches. Do not run unless you accept permanent data loss. Never run the old
+"Seed ZYROX ARENA tournaments" workflow after this; this workflow already seeds.
+
+MATCH SETUP
+- Original fees, prize pools, player limits, kill rewards and prize splits are preserved.
+- Same-fee matches are placed next to each other in exact pairs.
+- Every match gets Rules & Regulations.
+- If any fee count is odd, seeding stops instead of changing a fee.
+- Seeder skips if ZYROX AUTO 2026 matches already exist.
+
+DOWNLOAD PAGE / APK
+- The page uses the existing app icon at expo-app/assets/zyrox-app-icon.png.
+- The APK download link expects a GitHub Release asset named exactly ZYROX-ARENA.apk.
+- There is currently no latest GitHub Release detected in the repository, so the APK
+  link will not work until you create a Release and upload the already-built APK:
+  Repository > Releases > Draft a new release > upload APK asset > publish.
+- Do not upload secrets or keystore files to the repository.
+
+GITHUB PAGES
+- The page files are under docs/. In repository Settings > Pages, set Deploy from a branch,
+  branch main, folder /docs, then Save (if this is not already configured).
+- After publish, test:
+  https://whatappbusiness46-eng.github.io/RIFAT-TOURNAMENT-APP/
+- Google indexing is not instant or guaranteed. Add the site in Google Search Console,
+  verify ownership, submit:
+  https://whatappbusiness46-eng.github.io/RIFAT-TOURNAMENT-APP/sitemap.xml
+  then request indexing for the homepage.
+
+PLAY PROTECT
+- Keep Play Protect enabled. This page does not promise bypassing Play Protect.
+- If Google Play Protect blocks the APK, do not disable security; publish through Google Play
+  or resolve the warning through Google's app verification process.
+
+WHAT IS NOT AUTOMATIC
+This ZIP cannot publish files to GitHub, access your Supabase database, upload your APK,
+change GitHub Pages settings, or submit Google Search Console on your behalf. Those require
+your GitHub account actions and the secrets/APK asset. The workflow is prepared for GitHub
+Actions; it has not been run and no live data has been changed.
