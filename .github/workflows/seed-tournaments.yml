@@ -1,17 +1,8 @@
 
-name: Reset ZYROX ARENA Database
+name: Seed ZYROX ARENA tournaments
 
 on:
   workflow_dispatch:
-    inputs:
-      confirm_reset:
-        description: "Type YES to permanently reset the database"
-        required: true
-        type: choice
-        options:
-          - NO
-          - YES
-        default: NO
 
 permissions:
   contents: read
@@ -21,10 +12,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  reset:
-    if: ${{ github.event.inputs.confirm_reset == 'YES' }}
+  seed:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -38,40 +28,24 @@ jobs:
       - name: Install dependencies
         run: npm install --omit=dev
 
-      - name: Validate reset requirements
+      - name: Validate database connection
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "DATABASE_URL secret is missing."
             exit 1
           fi
 
-          if [ -z "$ADMIN_EMAIL" ]; then
-            echo "ADMIN_EMAIL secret is missing."
-            exit 1
-          fi
+      - name: Check tournament seeder
+        run: node --check server/seed-tournaments.js
 
-          if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
-            echo "ADMIN_PASSWORD must be at least 12 characters."
-            exit 1
-          fi
-
-      - name: Check reset script
-        run: node --check server/reset-database.js
-
-      - name: Run full database reset
-        run: node server/reset-database.js
+      - name: Create tournament matches
+        run: npm run seed:tournaments
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
           PGSSLMODE: require
-          CONFIRM_ZYROX_FULL_RESET: YES
 
-      - name: Reset completed
-        run: echo "Database reset completed successfully."
+      - name: Seeding completed
+        run: echo "Tournament seeding workflow completed."
         
