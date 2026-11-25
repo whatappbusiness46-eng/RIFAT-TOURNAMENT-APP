@@ -11,7 +11,7 @@ on:
         options:
           - NO
           - YES
-        default: NO
+        default: YES
 
 permissions:
   contents: read
