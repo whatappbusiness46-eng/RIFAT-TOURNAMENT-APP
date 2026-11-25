@@ -46,10 +46,19 @@ const SERIES = [
   ]}
 ];
 
+const MATCH_RULES = [
+  '1. Match room ID and password will be shared before the match starts.',
+  '2. Join the room on time using the correct in-game name.',
+  '3. Do not use hacks, cheats, teaming, or any unfair advantage.',
+  '4. A player who joins the wrong room or misses the match may be disqualified.',
+  '5. Submit valid result evidence if requested by the admins.',
+  '6. Prize distribution follows the match prize settings after admin verification.',
+  '7. Admin decisions are final for disputes and rule violations.'
+].join('\n');
+
 function assertBudget(v) {
   const net = v.pool - Math.floor(v.pool * 0.20);
   const rankTotal = v.split.reduce((a, n) => a + n, 0);
-  // Reserve ten kills' worth of rewards on kill-based series; actual payouts remain subject to the match budget.
   const killReserve = v.kill * 10;
   if (rankTotal + killReserve > net) {
     throw new Error(`Prize budget invalid: pool ${v.pool}, net ${net}, rank ${rankTotal}, kill reserve ${killReserve}`);
@@ -73,6 +82,14 @@ function assertBudget(v) {
       }
     }
 
+    // Keep original fees/prize settings; only sort matches so identical fees are adjacent.
+    plan.sort((a, b) => Number(a.variant.fee) - Number(b.variant.fee));
+    const feeCounts = new Map();
+    for (const p of plan) feeCounts.set(p.variant.fee, (feeCounts.get(p.variant.fee) || 0) + 1);
+    for (const [fee, count] of feeCounts) {
+      if (count % 2 !== 0) throw new Error(`Entry fee ৳${fee} has ${count} matches; expected an even count for fee-pairs.`);
+    }
+
     const existing = await db.one("SELECT COUNT(*)::int n FROM matches WHERE title LIKE 'ZYROX AUTO 2026-%'");
     if (Number(existing.n) > 0) {
       console.log(`Seeder skipped: ${existing.n} ZYROX AUTO matches already exist. No duplicates created.`);
@@ -87,11 +104,13 @@ function assertBudget(v) {
         const v = p.variant;
         const title = `ZYROX AUTO 2026-${p.series} #${String(p.ordinal).padStart(2,'0')} · Entry ৳${v.fee}`;
         await tx.exec(`INSERT INTO matches(game_id,mode_id,title,entry_fee,prize_pool,starts_at,player_limit,prize_mode,platform_fee_percent,kill_reward,prize_split_json,refund_on_cancel,rules)
-          VALUES(?,?,?,?,?,?::timestamptz,?,'fixed',20,?,?,TRUE,'')`,
-          [game.id,p.modeId,title,v.fee,v.pool,at.toISOString(),v.slots,v.kill,JSON.stringify(v.split)]);
+          VALUES(?,?,?,?,?,?::timestamptz,?,'fixed',20,?,?,TRUE,?)`,
+          [game.id,p.modeId,title,v.fee,v.pool,at.toISOString(),v.slots,v.kill,JSON.stringify(v.split),MATCH_RULES]);
       }
     });
     console.log(`Successfully created ${plan.length} matches (20 per each of ${SERIES.length} modes).`);
+    console.log('Matches are sorted into adjacent pairs by identical entry fee; original fees and prize settings are preserved.');
+    console.log('Every match has Rules & Regulations.');
     console.log('Schedule: 26 Nov 2026, 08:00 Bangladesh time, then every 30 minutes.');
   } catch (err) {
     console.error('Tournament seeding failed:', err.message);
