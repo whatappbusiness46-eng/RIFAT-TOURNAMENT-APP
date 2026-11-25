@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_reset:
-        description: "Type YES to permanently reset the database"
+        description: "Type YES to permanently erase all app data"
         required: true
         type: choice
         options:
@@ -22,56 +22,51 @@ concurrency:
 
 jobs:
   reset:
-    if: ${{ github.event.inputs.confirm_reset == 'YES' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Require explicit confirmation
+        env:
+          CONFIRM_RESET: \${{ inputs.confirm_reset }}
+        run: |
+          if [ "$CONFIRM_RESET" != "YES" ]; then
+            echo "::error::Reset cancelled. Select YES to continue."
+            exit 1
+          fi
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install dependencies
         run: npm install --omit=dev
 
-      - name: Validate reset requirements
+      - name: Validate secrets
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          DATABASE_URL: \${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: \${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: \${{ secrets.ADMIN_PASSWORD }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL secret is missing."
-            exit 1
-          fi
+          set -eu
+          test -n "$DATABASE_URL" || { echo "::error::DATABASE_URL missing"; exit 1; }
+          test -n "$ADMIN_EMAIL" || { echo "::error::ADMIN_EMAIL missing"; exit 1; }
+          [ "\${#ADMIN_PASSWORD}" -ge 12 ] || { echo "::error::ADMIN_PASSWORD must be 12+ characters"; exit 1; }
 
-          if [ -z "$ADMIN_EMAIL" ]; then
-            echo "ADMIN_EMAIL secret is missing."
-            exit 1
-          fi
-
-          if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
-            echo "ADMIN_PASSWORD must be at least 12 characters."
-            exit 1
-          fi
-
-      - name: Check reset script
+      - name: Check script
         run: node --check server/reset-database.js
 
-      - name: Run full database reset
-        run: node server/reset-database.js
+      - name: Run reset
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
+          DATABASE_URL: \${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: \${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: \${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_NAME: \${{ secrets.ADMIN_NAME }}
           PGSSLMODE: require
           CONFIRM_ZYROX_FULL_RESET: YES
+        run: node server/reset-database.js
 
-      - name: Reset completed
-        run: echo "Database reset completed successfully."
+      - name: Success
+        run: echo "Database reset completed."
         
