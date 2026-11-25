@@ -1,13 +1,31 @@
 
-name: Seed ZYROX ARENA tournaments
+name: Reset ZYROX ARENA Database
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_reset:
+        description: "Type YES to permanently reset the database"
+        required: true
+        type: choice
+        options:
+          - NO
+          - YES
+        default: NO
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zyrox-database-maintenance
+  cancel-in-progress: false
 
 jobs:
-  seed:
+  reset:
+    if: ${{ github.event.inputs.confirm_reset == 'YES' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,9 +38,40 @@ jobs:
       - name: Install dependencies
         run: npm install --omit=dev
 
-      - name: Seed tournament matches
-        run: npm run seed:tournaments
+      - name: Validate reset requirements
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is missing."
+            exit 1
+          fi
+
+          if [ -z "$ADMIN_EMAIL" ]; then
+            echo "ADMIN_EMAIL secret is missing."
+            exit 1
+          fi
+
+          if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
+            echo "ADMIN_PASSWORD must be at least 12 characters."
+            exit 1
+          fi
+
+      - name: Check reset script
+        run: node --check server/reset-database.js
+
+      - name: Run full database reset
+        run: node server/reset-database.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
           PGSSLMODE: require
-          
+          CONFIRM_ZYROX_FULL_RESET: YES
+
+      - name: Reset completed
+        run: echo "Database reset completed successfully."
+        
