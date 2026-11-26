@@ -18,34 +18,35 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
+          cache: npm
 
-      - name: Install dependencies
+      - name: Install production dependencies
         run: npm install --omit=dev
 
-      - name: Validate database connection
+      - name: Validate database secret
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL secret is missing."
+            echo "ERROR: DATABASE_URL secret is missing."
             exit 1
           fi
 
-      - name: Check tournament seeder
+      - name: Check seeder syntax
         run: node --check server/seed-tournaments.js
 
-      - name: Create tournament matches
+      - name: Seed 200 tournaments
         run: npm run seed:tournaments
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PGSSLMODE: require
 
-      - name: Seeding completed
-        run: echo "Tournament seeding workflow completed."
+      - name: Complete
+        run: echo "ZYROX ARENA tournament seeding completed."
         
