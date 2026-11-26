@@ -1,36 +1,48 @@
 
 require('dotenv').config();
 
-// DESTRUCTIVE: This script permanently resets production database.
-// Never import this file from the normal server startup.
-
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 
-(async () => {
-  if (process.env.CONFIRM_ZYROX_FULL_RESET !== 'YES') {
-    throw new Error('Reset blocked: confirmation is missing.');
-  }
-
-  const adminEmail = String(process.env.ADMIN_EMAIL || '')
-    .trim()
-    .toLowerCase();
-
-  const adminPassword = String(process.env.ADMIN_PASSWORD || '');
-
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is required.');
-  }
-
-  if (!adminEmail || adminPassword.length < 12) {
-    throw new Error(
-      'ADMIN_EMAIL and ADMIN_PASSWORD (minimum 12 characters) are required.'
-    );
-  }
-
+async function resetDatabase() {
   try {
+    // Safety confirmation
+    if (process.env.CONFIRM_ZYROX_FULL_RESET !== 'YES') {
+      throw new Error(
+        'RESET BLOCKED: CONFIRM_ZYROX_FULL_RESET must be YES.'
+      );
+    }
+
+    const adminEmail = String(process.env.ADMIN_EMAIL || '')
+      .trim()
+      .toLowerCase();
+
+    const adminPassword = String(process.env.ADMIN_PASSWORD || '');
+
+    const adminName = String(
+      process.env.ADMIN_NAME || 'ZYROX ARENA Administrator'
+    ).trim();
+
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL secret is missing.');
+    }
+
+    if (!adminEmail || !/^\S+@\S+\.\S+$/.test(adminEmail)) {
+      throw new Error('A valid ADMIN_EMAIL is required.');
+    }
+
+    if (adminPassword.length < 12) {
+      throw new Error('ADMIN_PASSWORD must be at least 12 characters.');
+    }
+
+    console.log('Connecting to PostgreSQL...');
+
+    // Create tables and ensure the latest schema exists.
     await db.init();
 
+    console.log('Database connected. Starting full reset...');
+
+    // Delete old application data atomically.
     await db.transaction(async tx => {
       await tx.exec(`
         TRUNCATE TABLE
@@ -51,10 +63,15 @@ const db = require('./db');
       `);
     });
 
-    // Recreate database defaults/schema.
+    console.log('Old database records removed.');
+
+    // Recreate default games, modes, rules and settings.
     await db.init();
 
-    const hash = await bcrypt.hash(adminPassword, 12);
+    console.log('Default games, modes, rules and settings recreated.');
+
+    // Create a fresh admin account.
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
 
     const publicId = String(
       100000 + Math.floor(Math.random() * 900000)
@@ -64,15 +81,26 @@ const db = require('./db');
       'ZADMIN' + Date.now().toString(36).toUpperCase();
 
     await db.transaction(async tx => {
-      const user = await tx.one(
+      const existing = await tx.one(
+        'SELECT id FROM users WHERE lower(email)=?',
+        [adminEmail]
+      );
+
+      if (existing) {
+        throw new Error(
+          'Admin email already exists after reset. Check database state.'
+        );
+      }
+
+      const admin = await tx.one(
         `INSERT INTO users
-          (name, email, password_hash, role, referral_code, public_id)
-         VALUES (?, ?, ?, 'admin', ?, ?)
+          (name, email, password_hash, role, active, referral_code, public_id)
+         VALUES (?, ?, ?, 'admin', TRUE, ?, ?)
          RETURNING id`,
         [
-          process.env.ADMIN_NAME || 'Administrator',
+          adminName,
           adminEmail,
-          hash,
+          passwordHash,
           referralCode,
           publicId
         ]
@@ -82,18 +110,66 @@ const db = require('./db');
         `INSERT INTO wallets
           (user_id, balance, winning_balance)
          VALUES (?, 0, 0)`,
-        [user.id]
+        [admin.id]
       );
     });
 
-    console.log('Full database reset completed.');
-    console.log('Default games, modes, rules and settings recreated.');
-    console.log('Admin account recreated successfully.');
+    // Verify the reset and admin account.
+    const adminCheck = await db.one(
+      `SELECT id, email, role, active
+       FROM users
+       WHERE lower(email)=?`,
+      [adminEmail]
+    );
+
+    const gameCount = await db.one(
+      'SELECT COUNT(*)::int AS total FROM games'
+    );
+
+    const modeCount = await db.one(
+      'SELECT COUNT(*)::int AS total FROM modes'
+    );
+
+    const walletCheck = adminCheck
+      ? await db.one(
+          'SELECT balance, winning_balance FROM wallets WHERE user_id=?',
+          [adminCheck.id]
+        )
+      : null;
+
+    if (
+      !adminCheck ||
+      adminCheck.role !== 'admin' ||
+      !adminCheck.active ||
+      !walletCheck
+    ) {
+      throw new Error('Reset verification failed.');
+    }
+
+    console.log('------------------------------------');
+    console.log('ZYROX ARENA DATABASE RESET SUCCESS');
+    console.log('------------------------------------');
+    console.log('Admin account: CREATED');
+    console.log('Admin role: VERIFIED');
+    console.log('Admin wallet: CREATED');
+    console.log('Games:', gameCount.total);
+    console.log('Modes:', modeCount.total);
+    console.log('Default rules: RESTORED');
+    console.log('Default settings: RESTORED');
+    console.log('------------------------------------');
+
+  } catch (error) {
+    console.error('------------------------------------');
+    console.error('ZYROX ARENA DATABASE RESET FAILED');
+    console.error(error.stack || error.message);
+    console.error('------------------------------------');
+
+    process.exitCode = 1;
+
   } finally {
     await db.pool.end();
   }
-})().catch(err => {
-  console.error('FULL RESET FAILED:', err.message);
-  process.exitCode = 1;
-});
-  
+}
+
+resetDatabase();
+        
