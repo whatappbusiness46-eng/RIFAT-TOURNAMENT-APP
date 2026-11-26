@@ -5,10 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       confirm_reset:
-        description: "Turn TRUE on to permanently reset the database"
+        description: "Type YES to permanently reset the database"
         required: true
-        type: boolean
-        default: false
+        type: choice
+        options:
+          - NO
+          - YES
+        default: NO
 
 permissions:
   contents: read
@@ -19,52 +22,48 @@ concurrency:
 
 jobs:
   reset:
-    if: ${{ inputs.confirm_reset }}
+    if: ${{ github.event.inputs.confirm_reset == 'YES' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
         with:
           node-version: 20
 
       - name: Install dependencies
         run: npm install --omit=dev
 
-      - name: Validate database secrets
-        shell: bash
+      - name: Validate reset requirements
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-          set -eu
-
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL secret is missing"
+            echo "DATABASE_URL secret is missing."
             exit 1
           fi
 
           if [ -z "$ADMIN_EMAIL" ]; then
-            echo "ADMIN_EMAIL secret is missing"
+            echo "ADMIN_EMAIL secret is missing."
             exit 1
           fi
 
-          if [ "${#ADMIN_PASSWORD}" -lt 12 ]; then
-            echo "ADMIN_PASSWORD must be at least 12 characters"
+          if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
+            echo "ADMIN_PASSWORD must be at least 12 characters."
             exit 1
           fi
-
-          echo "All required secrets are available."
 
       - name: Check reset script
         run: node --check server/reset-database.js
 
       - name: Run full database reset
+        run: node server/reset-database.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
@@ -72,10 +71,7 @@ jobs:
           ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
           PGSSLMODE: require
           CONFIRM_ZYROX_FULL_RESET: YES
-        run: node server/reset-database.js
 
-      - name: Verify completion
-        shell: bash
-        run: |
-          echo "SUCCESS - Database reset completed."
-          
+      - name: Reset completed
+        run: echo "Database reset completed successfully."
+        
