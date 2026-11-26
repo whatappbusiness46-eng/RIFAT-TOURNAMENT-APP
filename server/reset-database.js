@@ -1,78 +1,99 @@
 
-name: Reset ZYROX ARENA Database
+require('dotenv').config();
 
-on:
-  workflow_dispatch:
-    inputs:
-      confirm_reset:
-        description: "Select TRUE to permanently reset the database"
-        required: true
-        type: boolean
-        default: false
+// DESTRUCTIVE: This script permanently resets production database.
+// Never import this file from the normal server startup.
 
-permissions:
-  contents: read
+const bcrypt = require('bcryptjs');
+const db = require('./db');
 
-concurrency:
-  group: zyrox-database-maintenance
-  cancel-in-progress: false
+(async () => {
+  if (process.env.CONFIRM_ZYROX_FULL_RESET !== 'YES') {
+    throw new Error('Reset blocked: confirmation is missing.');
+  }
 
-jobs:
-  reset:
-    if: ${{ inputs.confirm_reset == true }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  const adminEmail = String(process.env.ADMIN_EMAIL || '')
+    .trim()
+    .toLowerCase();
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  const adminPassword = String(process.env.ADMIN_PASSWORD || '');
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required.');
+  }
 
-      - name: Install dependencies
-        run: npm install --omit=dev
+  if (!adminEmail || adminPassword.length < 12) {
+    throw new Error(
+      'ADMIN_EMAIL and ADMIN_PASSWORD (minimum 12 characters) are required.'
+    );
+  }
 
-      - name: Validate database secrets
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-        run: |
-          set -eu
+  try {
+    await db.init();
 
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::DATABASE_URL secret is missing"
-            exit 1
-          fi
+    await db.transaction(async tx => {
+      await tx.exec(`
+        TRUNCATE TABLE
+          referral_earnings,
+          results,
+          notifications,
+          transactions,
+          match_players,
+          matches,
+          wallets,
+          users,
+          home_videos,
+          rules,
+          settings,
+          modes,
+          games
+        RESTART IDENTITY CASCADE
+      `);
+    });
 
-          if [ -z "$ADMIN_EMAIL" ]; then
-            echo "::error::ADMIN_EMAIL secret is missing"
-            exit 1
-          fi
+    // Recreate database defaults/schema.
+    await db.init();
 
-          if [ "${#ADMIN_PASSWORD}" -lt 12 ]; then
-            echo "::error::ADMIN_PASSWORD must be at least 12 characters"
-            exit 1
-          fi
+    const hash = await bcrypt.hash(adminPassword, 12);
 
-          echo "All required secrets are available."
+    const publicId = String(
+      100000 + Math.floor(Math.random() * 900000)
+    );
 
-      - name: Check reset script
-        run: node --check server/reset-database.js
+    const referralCode =
+      'ZADMIN' + Date.now().toString(36).toUpperCase();
 
-      - name: Run full database reset
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
-          PGSSLMODE: require
-          CONFIRM_ZYROX_FULL_RESET: YES
-        run: node server/reset-database.js
+    await db.transaction(async tx => {
+      const user = await tx.one(
+        `INSERT INTO users
+          (name, email, password_hash, role, referral_code, public_id)
+         VALUES (?, ?, ?, 'admin', ?, ?)
+         RETURNING id`,
+        [
+          process.env.ADMIN_NAME || 'Administrator',
+          adminEmail,
+          hash,
+          referralCode,
+          publicId
+        ]
+      );
 
-      - name: Verify completion
-        run: echo "SUCCESS: Database reset script completed."
-              
+      await tx.exec(
+        `INSERT INTO wallets
+          (user_id, balance, winning_balance)
+         VALUES (?, 0, 0)`,
+        [user.id]
+      );
+    });
+
+    console.log('Full database reset completed.');
+    console.log('Default games, modes, rules and settings recreated.');
+    console.log('Admin account recreated successfully.');
+  } finally {
+    await db.pool.end();
+  }
+})().catch(err => {
+  console.error('FULL RESET FAILED:', err.message);
+  process.exitCode = 1;
+});
+  
