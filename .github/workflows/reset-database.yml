@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_reset:
-        description: "Select TRUE to permanently reset the database"
+        description: "Turn TRUE on to permanently reset the database"
         required: true
         type: boolean
         default: false
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   reset:
-    if: ${{ inputs.confirm_reset == true }}
+    if: ${{ inputs.confirm_reset }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -36,6 +36,7 @@ jobs:
         run: npm install --omit=dev
 
       - name: Validate database secrets
+        shell: bash
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
@@ -44,17 +45,17 @@ jobs:
           set -eu
 
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::DATABASE_URL secret is missing"
+            echo "DATABASE_URL secret is missing"
             exit 1
           fi
 
           if [ -z "$ADMIN_EMAIL" ]; then
-            echo "::error::ADMIN_EMAIL secret is missing"
+            echo "ADMIN_EMAIL secret is missing"
             exit 1
           fi
 
           if [ "${#ADMIN_PASSWORD}" -lt 12 ]; then
-            echo "::error::ADMIN_PASSWORD must be at least 12 characters"
+            echo "ADMIN_PASSWORD must be at least 12 characters"
             exit 1
           fi
 
@@ -74,5 +75,7 @@ jobs:
         run: node server/reset-database.js
 
       - name: Verify completion
-        run: echo "SUCCESS: Database reset script completed."
-        
+        shell: bash
+        run: |
+          echo "SUCCESS - Database reset completed."
+          
