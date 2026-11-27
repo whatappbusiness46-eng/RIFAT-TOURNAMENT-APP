@@ -5,13 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       confirm_reset:
-        description: "Select YES to permanently reset the database"
+        description: "Set true to permanently reset the database"
         required: true
-        type: choice
-        options:
-          - NO
-          - YES
-        default: NO
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,8 +39,8 @@ jobs:
         env:
           CONFIRM_INPUT: ${{ inputs.confirm_reset }}
         run: |
-          if [ "$CONFIRM_INPUT" != "YES" ]; then
-            echo "::error::Reset cancelled. Select YES to run the database reset."
+          if [ "$CONFIRM_INPUT" != "true" ] && [ "$CONFIRM_INPUT" != "TRUE" ] && [ "$CONFIRM_INPUT" != "YES" ]; then
+            echo "::error::Reset cancelled. Set confirm_reset to true."
             exit 1
           fi
 
