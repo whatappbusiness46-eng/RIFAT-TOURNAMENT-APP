@@ -6,7 +6,7 @@ on:
     inputs:
       confirm_reset:
         description: "Select YES to permanently reset the database"
-        required: yes
+        required: true
         type: choice
         options:
           - NO
