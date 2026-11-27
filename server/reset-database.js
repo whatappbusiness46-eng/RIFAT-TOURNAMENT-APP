@@ -6,7 +6,6 @@ const db = require('./db');
 
 async function resetDatabase() {
   try {
-    // Safety confirmation
     if (process.env.CONFIRM_ZYROX_FULL_RESET !== 'YES') {
       throw new Error(
         'RESET BLOCKED: CONFIRM_ZYROX_FULL_RESET must be YES.'
@@ -37,12 +36,10 @@ async function resetDatabase() {
 
     console.log('Connecting to PostgreSQL...');
 
-    // Create tables and ensure the latest schema exists.
     await db.init();
 
     console.log('Database connected. Starting full reset...');
 
-    // Delete old application data atomically.
     await db.transaction(async tx => {
       await tx.exec(`
         TRUNCATE TABLE
@@ -65,12 +62,10 @@ async function resetDatabase() {
 
     console.log('Old database records removed.');
 
-    // Recreate default games, modes, rules and settings.
     await db.init();
 
     console.log('Default games, modes, rules and settings recreated.');
 
-    // Create a fresh admin account.
     const passwordHash = await bcrypt.hash(adminPassword, 12);
 
     const publicId = String(
@@ -114,7 +109,6 @@ async function resetDatabase() {
       );
     });
 
-    // Verify the reset and admin account.
     const adminCheck = await db.one(
       `SELECT id, email, role, active
        FROM users
@@ -172,4 +166,4 @@ async function resetDatabase() {
 }
 
 resetDatabase();
-        
+  
