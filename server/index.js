@@ -377,6 +377,9 @@ async function start(){
       if(!/(clash squad|cs\s*4\s*vs\s*4|cs headshot|headshot|lone wolf|lose\s*(2|to)\s*win|reverse)/i.test(String(m.mode)))throw new Error('Team payout is only for CS and LW modes');
       if(m.payouts_published||m.status==='cancelled')throw new Error('Match is already paid or cancelled');
       if(winningTeam>teams.length)throw new Error('Winning team number is invalid');
+      const reverseMode=/(lose\\s*(2|to)\\s*win|reverse)/i.test(String(m.mode||''));
+      if(reverseMode&&teams.length!==2)throw new Error('Lose 2 Win / Reverse mode requires exactly 2 teams');
+      const payoutTeam=reverseMode?(winningTeam===1?2:1):winningTeam;
       const players=await tx.many('SELECT user_id FROM match_players WHERE match_id=? ORDER BY id',[id]);
       if(players.length!==Number(m.player_limit))throw new Error('All player slots must be full before team payout');
       const all=teams.flat().map(x=>integer(x,'Player ID',1));
@@ -384,18 +387,18 @@ async function start(){
       const joined=new Set(players.map(x=>String(x.user_id)));
       if(all.length!==players.length||all.some(x=>!joined.has(String(x))))throw new Error('Every joined player must be assigned to exactly one team');
       for(let i=0;i<teams.length;i++)for(const uid of teams[i])await tx.exec('UPDATE match_players SET team_number=? WHERE match_id=? AND user_id=?',[i+1,id,integer(uid,'Player ID',1)]);
-      const gross=Number(m.prize_pool),fee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-fee,winners=teams[winningTeam-1];
+      const gross=Number(m.prize_pool),fee=Math.floor(gross*Number(m.platform_fee_percent)/100),net=gross-fee,winners=teams[payoutTeam-1];
       const base=Math.floor(net/winners.length),remainder=net%winners.length;let paid=0;
       for(let i=0;i<winners.length;i++){
         const uid=integer(winners[i],'Player ID',1),amount=base+(i<remainder?1:0),rank=i+1;
         await tx.exec('INSERT INTO results(match_id,user_id,rank,prize,kills) VALUES(?,?,?,?,0)',[id,uid,rank,amount]);
-        if(amount>0){await tx.exec('UPDATE wallets SET winning_balance=winning_balance+? WHERE user_id=?',[amount,uid]);await tx.exec("INSERT INTO transactions(user_id,type,amount,status,reference,note,admin_id) VALUES(?,'prize',?,'approved',?,?,?)",[uid,amount,`match:${id}:player:${uid}`,`CS/LW team ${winningTeam} winner: equal share from ৳${net}`,q.user.id]);}
+        if(amount>0){await tx.exec('UPDATE wallets SET winning_balance=winning_balance+? WHERE user_id=?',[amount,uid]);await tx.exec("INSERT INTO transactions(user_id,type,amount,status,reference,note,admin_id) VALUES(?,'prize',?,'approved',?,?,?)",[uid,amount,`match:${id}:player:${uid}`,reverseMode?`Lose 2 Win / Reverse: losing team ${payoutTeam} receives equal share from ৳${net}`:`CS/LW team ${payoutTeam} winner: equal share from ৳${net}`,q.user.id]);}
         paid+=amount;
       }
       const upd=await tx.exec("UPDATE matches SET status='completed',payouts_published=TRUE WHERE id=? AND payouts_published=FALSE",[id]);if(!upd.rowCount)throw new Error('Payout already published');
-      return {teams:teams.length,winners:winners.length,platform_fee:fee,net_prize:net,total_paid:paid};
+      return {teams:teams.length,winners:winners.length,selected_winning_team:winningTeam,payout_team:payoutTeam,reverse_mode:reverseMode,platform_fee:fee,net_prize:net,total_paid:paid};
     });
-    s.json({ok:true,...result,message:'Team prize divided equally and credited exactly once'});
+    s.json({ok:true,...result,message:result.reverse_mode?'Reverse mode: losing team prize divided equally and credited exactly once':'Team prize divided equally and credited exactly once'});
   }));
   app.get('/api/admin/transactions',wrap(async(q,s)=>s.json(await db.many('SELECT t.*,u.name,u.email FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC'))));
   app.post('/api/admin/transactions/:id/decision',wrap(async(q,s)=>{
